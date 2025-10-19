@@ -9,16 +9,6 @@ Sistema de gestión de horarios de exámenes desarrollado con Django REST Framew
 - **Contenedores**: Docker y Docker Compose
 - **API REST**: Para gestión de horarios de exámenes
 
-## Modelos principales
-
-- **Periodo**: Gestión de periodos académicos
-- **TipoEvaluacion**: Tipos de evaluaciones/exámenes
-- **Grupo**: Grupos de estudiantes
-- **Materia**: Materias académicas
-- **Profesor**: Profesores y sinodales
-- **Aula**: Aulas disponibles
-- **HorarioExamen**: Horarios de exámenes (modelo central)
-
 ## Instalación con Docker
 
 ### Prerrequisitos
