@@ -2,14 +2,14 @@
 
 Sistema de gestión de horarios de exámenes desarrollado con Django REST Framework y PostgreSQL.
 
-## 🚀 Características
+## Características
 
 - **Backend**: Django REST Framework
 - **Base de datos**: PostgreSQL
 - **Contenedores**: Docker y Docker Compose
 - **API REST**: Para gestión de horarios de exámenes
 
-## 📋 Modelos principales
+## Modelos principales
 
 - **Periodo**: Gestión de periodos académicos
 - **TipoEvaluacion**: Tipos de evaluaciones/exámenes
@@ -19,7 +19,7 @@ Sistema de gestión de horarios de exámenes desarrollado con Django REST Framew
 - **Aula**: Aulas disponibles
 - **HorarioExamen**: Horarios de exámenes (modelo central)
 
-## 🐳 Instalación con Docker
+## Instalación con Docker
 
 ### Prerrequisitos
 - Docker
@@ -57,7 +57,7 @@ docker-compose exec web python manage.py createsuperuser
   - Contraseña: `root`
   - Base de datos: `apexunsisdb`
 
-## 🛠️ Comandos útiles
+## Comandos útiles
 
 ```bash
 # Ver logs
@@ -76,7 +76,7 @@ docker-compose down
 docker-compose down -v
 ```
 
-## 📁 Estructura del proyecto
+## Estructura del proyecto
 
 ```
 APEX-UNSIS/
@@ -88,14 +88,6 @@ APEX-UNSIS/
 └── manage.py          # CLI de Django
 ```
 
-## 🔧 Desarrollo
+## Desarrollo
 
 Para desarrollo local, los cambios en el código se reflejan automáticamente gracias al volumen montado en Docker.
-
-## 📝 Licencia
-
-[Especificar licencia]
-
-## 👥 Contribuidores
-
-- [Tu nombre]
