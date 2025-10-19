@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: apexunsisdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+    volumes:
+      - apexunsis_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+  web:
+    build: .
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_NAME=apexunsisdb
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - DB_HOST=db
+      - DB_PORT=5432
+    depends_on:
+      - db
+
+volumes:
+  apexunsis_data:
