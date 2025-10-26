@@ -8,14 +8,15 @@ services:
     volumes:
       - apexunsis_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "0.0.0.0:5433:5432"
+    command: postgres -c 'listen_addresses=*'
 
   web:
     build: .
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "0.0.0.0:8000:8000"
     environment:
       - DB_NAME=apexunsisdb
       - DB_USER=postgres
