@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:15
+    container_name: postgresql
     environment:
       POSTGRES_DB: apexunsisdb
       POSTGRES_USER: postgres
@@ -11,6 +12,7 @@ services:
       - "5433:5432"
 
   web:
+    container_name: apexunsis_back
     build: .
     volumes:
       - .:/app
