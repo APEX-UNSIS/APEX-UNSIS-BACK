@@ -1,6 +1,6 @@
 # Apex Backend
 
-> API REST construida con **FastAPI** - Rápida, moderna y lista para producción.
+> API REST construida con **FastAPI** y **PostgreSQL** - Rápida, moderna y lista para producción.
 
 ---
 
@@ -11,6 +11,7 @@ Asegúrate de tener instalado:
 - **Python** 3.8 o superior
 - **pip** (gestor de paquetes de Python)
 - **Git**
+- **PostgreSQL** 12 o superior
 
 > [!TIP]
 > Verifica tu versión de Python ejecutando: `python3 --version`
@@ -56,9 +57,50 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### 5. Configurar variables de entorno
+
+1. Copia el archivo de ejemplo:
+```bash
+cp .env.example .env
+```
+
+2. Edita el archivo `.env` con tus credenciales de PostgreSQL:
+```bash
+nano .env  # o usa tu editor preferido
+```
+
+3. Configura las siguientes variables:
+
+```env
+# Configuración de Base de Datos PostgreSQL
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=tu_usuario
+DB_PASSWORD=tu_contraseña
+DB_NAME=apex_db
+
+# Configuración de la Aplicación
+APP_ENV=development
+```
+
+> [!IMPORTANT]
+> Nunca compartas tu archivo `.env` ni lo subas a Git. Este archivo contiene credenciales sensibles.
+
+> [!TIP]
+> Asegúrate de crear la base de datos en PostgreSQL antes de ejecutar la aplicación:
+> ```sql
+> CREATE DATABASE apex_db;
+> ```
+
 ---
 
 ## Ejecutar el Proyecto
+
+> [!IMPORTANT]
+> **Antes de ejecutar, asegúrate de:**
+> 1. Tener el entorno virtual activado: `source venv/bin/activate` (Linux/macOS) o `venv\Scripts\activate` (Windows)
+> 2. Haber creado la base de datos en PostgreSQL
+> 3. Haber configurado correctamente el archivo `.env`
 
 ### Modo desarrollo (con auto-reload)
 
@@ -90,14 +132,34 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ---
 
+## Probar la Conexión a la Base de Datos
+
+Una vez que la aplicación esté corriendo, puedes probar la conexión a PostgreSQL visitando:
+
+```
+http://localhost:8000/db-test
+```
+
+Deberías ver una respuesta JSON confirmando la conexión exitosa.
+
+---
+
 ## Estructura del Proyecto
 
 ```
 apex-backend/
 ├── app/
 │   ├── __init__.py
-│   └── main.py          # 🚀 Aplicación principal FastAPI
+│   ├── main.py          # 🚀 Aplicación principal FastAPI
+│   ├── config.py        # ⚙️ Configuración y variables de entorno
+│   ├── database.py      # 🗄️ Conexión a PostgreSQL con SQLAlchemy
+│   ├── controller/      # 🎮 Controladores (rutas)
+│   ├── model/           # 📊 Modelos de base de datos
+│   ├── repository/      # 💾 Capa de acceso a datos
+│   └── service/         # 🔧 Lógica de negocio
 ├── venv/                # 📦 Entorno virtual (no versionado)
+├── .env                 # 🔐 Variables de entorno (no versionado)
+├── .env.example         # 📋 Plantilla de variables de entorno
 ├── .gitignore           # 🚫 Archivos ignorados por Git
 ├── requirements.txt     # 📋 Dependencias del proyecto
 └── README.md            # 📖 Documentación
