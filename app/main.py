@@ -2,6 +2,8 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+
+from app.api.v1.endpoints import api_router
 from app.database import get_db, init_db
 from app.config import get_settings
 
@@ -60,3 +62,5 @@ def get_carreras(db: Session = Depends(get_db)):
             "status": "error",
             "message": f"Error al consultar carreras: {str(e)}"
         }
+
+app.include_router(api_router, prefix="/api/v1")
