@@ -13,3 +13,6 @@ class MateriaService(BaseService[Materia, MateriaCreate, MateriaUpdate]):
 
     def get_by_nombre(self, nombre: str) -> Optional[Materia]:
         return self.repository.get_by_nombre(nombre)
+
+    def get_by_carrera(self, id_carrera: str, skip: int = 0, limit: int = 100):
+        return self.repository.get_by_carrera(id_carrera, skip, limit)

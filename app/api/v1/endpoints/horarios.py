@@ -65,6 +65,16 @@ def read_horarios_por_grupo(
     return service.get_by_grupo(id_grupo, skip=skip, limit=limit)
 
 
+@router.get("/carrera/{id_carrera}", response_model=List[HorarioClase])
+def read_horarios_por_carrera(
+    id_carrera: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    service: HorarioService = Depends(get_horario_service)
+):
+    return service.get_by_carrera(id_carrera, skip=skip, limit=limit)
+
+
 @router.post("/", response_model=HorarioClase)
 def create_horario(
     horario: HorarioClaseCreate,

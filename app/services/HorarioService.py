@@ -19,3 +19,6 @@ class HorarioService(BaseService[HorarioClase, HorarioClaseCreate, HorarioClaseU
 
     def get_by_grupo(self, id_grupo: str, skip: int = 0, limit: int = 100) -> List[HorarioClase]:
         return self.repository.get_by_grupo(id_grupo, skip, limit)
+
+    def get_by_carrera(self, id_carrera: str, skip: int = 0, limit: int = 100) -> List[HorarioClase]:
+        return self.repository.get_by_carrera(id_carrera, skip, limit)

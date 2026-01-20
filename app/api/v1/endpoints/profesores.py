@@ -72,3 +72,23 @@ def delete_profesor(
     if profesor is None:
         raise HTTPException(status_code=404, detail="Profesor no encontrado")
     return profesor
+
+
+@router.get("/carrera/{id_carrera}", response_model=List[Profesor])
+def read_profesores_por_carrera(
+        id_carrera: str,
+        skip: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=100),
+        service: ProfesorService = Depends(get_profesor_service)
+):
+    return service.get_by_carrera(id_carrera, skip=skip, limit=limit)
+
+
+@router.get("/sinodales/carrera/{id_carrera}", response_model=List[Profesor])
+def read_sinodales_por_carrera(
+        id_carrera: str,
+        skip: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=100),
+        service: ProfesorService = Depends(get_profesor_service)
+):
+    return service.get_sinodales_by_carrera(id_carrera, skip=skip, limit=limit)

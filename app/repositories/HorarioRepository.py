@@ -31,3 +31,12 @@ class HorarioRepository(BaseRepository[HorarioClase, HorarioClaseCreate, Horario
         return self.db.query(HorarioClase).filter(
             HorarioClase.id_grupo == id_grupo
         ).offset(skip).limit(limit).all()
+
+    def get_by_carrera(self, id_carrera: str, skip: int = 0, limit: int = 100) -> List[HorarioClase]:
+        """Obtiene horarios por carrera a través de grupos"""
+        from app.models.GrupoEscolar import GrupoEscolar
+        return self.db.query(HorarioClase).join(
+            GrupoEscolar, HorarioClase.id_grupo == GrupoEscolar.id_grupo
+        ).filter(
+            GrupoEscolar.id_carrera == id_carrera
+        ).offset(skip).limit(limit).all()

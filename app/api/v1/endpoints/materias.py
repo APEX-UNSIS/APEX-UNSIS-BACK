@@ -63,3 +63,13 @@ def delete_materia(
     if materia is None:
         raise HTTPException(status_code=404, detail="Materia no encontrada")
     return materia
+
+
+@router.get("/carrera/{id_carrera}", response_model=List[Materia])
+def read_materias_por_carrera(
+    id_carrera: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    service: MateriaService = Depends(get_materia_service)
+):
+    return service.get_by_carrera(id_carrera, skip=skip, limit=limit)
