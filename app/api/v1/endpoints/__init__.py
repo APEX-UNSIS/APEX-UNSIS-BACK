@@ -1,10 +1,12 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import carreras, periodos, evaluaciones, materias, profesores, aulas, grupos, horarios, \
-    permisos, ventanas, solicitudes, grupos_examen, asignaciones_aulas, asignaciones_sinodales
+    permisos, ventanas, solicitudes, grupos_examen, asignaciones_aulas, asignaciones_sinodales, auth, usuarios
 
 api_router = APIRouter()
 
+api_router.include_router(auth.router)
+api_router.include_router(usuarios.router)
 api_router.include_router(carreras.router)
 api_router.include_router(periodos.router)
 api_router.include_router(evaluaciones.router)

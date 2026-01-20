@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     
     # Configuración de la Aplicación
     app_env: str = "development"
+    secret_key: str = "tu-clave-secreta-muy-segura-cambiar-en-produccion"
     
     @property
     def database_url(self) -> str:

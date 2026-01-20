@@ -6,6 +6,8 @@ from sqlalchemy import text
 from app.api.v1.endpoints import api_router
 from app.database import get_db, init_db
 from app.config import get_settings
+# Importar modelos para que se registren en SQLAlchemy al inicializar la base de datos
+from app.models import Usuario, Carrera  # noqa: F401
 
 # Obtener configuración
 settings = get_settings()
@@ -19,7 +21,12 @@ app = FastAPI(
 # Configurar CORS 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001"
+    ],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
