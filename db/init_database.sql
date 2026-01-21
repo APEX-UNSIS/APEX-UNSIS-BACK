@@ -176,10 +176,15 @@ CREATE TABLE asignacion_sinodales (
 
 -- Carreras
 INSERT INTO carreras (id_carrera, nombre_carrera) VALUES
-('ING-SIS', 'Ingeniería en Sistemas'),
-('ING-IND', 'Ingeniería Industrial'),
-('LIC-ADM', 'Licenciatura en Administración'),
-('ING-CIV', 'Ingeniería Civil');
+('A06LAM01', 'Licenciatura en Administración Municipal'),
+('A06LAP02', 'Licenciatura en Administración Pública'),
+('A06LCB03', 'Licenciaturas en Ciencias Biomédicas'),
+('A06LCE04', 'Licenciatura en Ciencias Empresariales'),
+('A06LE05', 'Licenciatura en Enfermería'),
+('A06LI06', 'Licenciatura en Informática'),
+('A06LM07', 'Licenciatura en Medicina'),
+('A06LN08', 'Licenciatura en Nutrición'),
+('A06LO09', 'Licenciatura en Odontología');
 
 -- Usuarios (contraseñas hasheadas con bcrypt)
 -- admin123 -> $2b$12$4dGtQjmlRcIhLzEED.G.sut2y34cw7rvHCIzp/CsYPKeT2VEIQ7AK
@@ -187,8 +192,9 @@ INSERT INTO carreras (id_carrera, nombre_carrera) VALUES
 -- servicios123 -> $2b$12$4rE5Gx4XxcvMrCvxl/XYReUEbvpiy66rTF/LDzs0RRD4zUlNJ.D6G
 INSERT INTO usuarios (id_usuario, nombre_usuario, id_carrera, contraseña, rol, is_active) VALUES
 ('admin', 'Administrador del Sistema', NULL, '$2b$12$4dGtQjmlRcIhLzEED.G.sut2y34cw7rvHCIzp/CsYPKeT2VEIQ7AK', 'admin', TRUE),
-('jefe001', 'Jefe de Carrera - Sistemas', 'ING-SIS', '$2b$12$EpTN7znyFdvpf6oCBwhAz.heqp3lzQHA1gGiQ2YBNXG9C6as21G7G', 'jefe', TRUE),
-('jefe002', 'Jefe de Carrera - Industrial', 'ING-IND', '$2b$12$EpTN7znyFdvpf6oCBwhAz.heqp3lzQHA1gGiQ2YBNXG9C6as21G7G', 'jefe', TRUE),
+('jefe001', 'Jefe - Informática', 'A06LI06', '$2b$12$EpTN7znyFdvpf6oCBwhAz.heqp3lzQHA1gGiQ2YBNXG9C6as21G7G', 'jefe', TRUE),
+('jefe002', 'Jefe - Medicina', 'A06LM07', '$2b$12$EpTN7znyFdvpf6oCBwhAz.heqp3lzQHA1gGiQ2YBNXG9C6as21G7G', 'jefe', TRUE),
+('jefe003', 'Jefe - Enfermería', 'A06LE05', '$2b$12$EpTN7znyFdvpf6oCBwhAz.heqp3lzQHA1gGiQ2YBNXG9C6as21G7G', 'jefe', TRUE),
 ('servicios001', 'Servicios Escolares', NULL, '$2b$12$4rE5Gx4XxcvMrCvxl/XYReUEbvpiy66rTF/LDzs0RRD4zUlNJ.D6G', 'servicios', TRUE);
 
 -- Profesores
@@ -235,14 +241,18 @@ INSERT INTO aulas (id_aula, nombre_aula, capacidad, is_disable) VALUES
 
 -- Grupos Escolares
 INSERT INTO grupos_escolares (id_grupo, nombre_grupo, numero_alumnos, id_carrera) VALUES
-('GRUPO001', '1A', 30, 'ING-SIS'),
-('GRUPO002', '1B', 28, 'ING-SIS'),
-('GRUPO003', '2A', 32, 'ING-SIS'),
-('GRUPO004', '2B', 30, 'ING-SIS'),
-('GRUPO005', '3A', 25, 'ING-SIS'),
-('GRUPO006', '1A', 35, 'ING-IND'),
-('GRUPO007', '1B', 33, 'ING-IND'),
-('GRUPO008', '2A', 30, 'ING-IND');
+('GRUPO001', '1A', 30, 'A06LI06'),
+('GRUPO002', '1B', 28, 'A06LI06'),
+('GRUPO003', '2A', 32, 'A06LI06'),
+('GRUPO004', '2B', 30, 'A06LI06'),
+('GRUPO005', '3A', 25, 'A06LI06'),
+('GRUPO006', '1A', 35, 'A06LM07'),
+('GRUPO007', '1B', 33, 'A06LM07'),
+('GRUPO008', '2A', 30, 'A06LM07'),
+('GRUPO009', '1A', 28, 'A06LE05'),
+('GRUPO010', '1B', 32, 'A06LE05'),
+('GRUPO011', '1A', 25, 'A06LN08'),
+('GRUPO012', '1A', 30, 'A06LO09');
 
 -- Ventanas de Aplicación por Periodo
 INSERT INTO ventanas_de_aplicacion_por_periodo (id_ventana, id_periodo, id_evaluacion, fecha_inicio_examenes, fecha_fin_examenes) VALUES
