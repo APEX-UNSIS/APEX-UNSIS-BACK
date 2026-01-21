@@ -1,273 +1,399 @@
-# Apex Backend
+# API REST - APEX UNSIS Backend
 
-> API REST construida con **FastAPI** y **PostgreSQL** - Rápida, moderna y lista para producción.
+> API REST con FastAPI y PostgreSQL - Sistema de gestión de exámenes profesionales con autenticación JWT
 
----
+**URL Base:** `http://localhost:8000`
 
-## Requisitos Previos
-
-Asegúrate de tener instalado:
-
-- **Python** 3.8 o superior
-- **pip** (gestor de paquetes de Python)
-- **Git**
-- **PostgreSQL** 12 o superior
-
-> [!TIP]
-> Verifica tu versión de Python ejecutando: `python3 --version`
+**Documentación Completa:** Ver carpeta `/docs` para guías de configuración e implementación
 
 ---
 
-## Instalación
+## Autenticación JWT
 
-### 1. Clonar el repositorio
+La API utiliza tokens JWT (JSON Web Tokens) para autenticación. Todos los endpoints protegidos requieren un token válido en el header `Authorization`.
 
-```bash
-git clone <url-del-repositorio>
-cd apex-backend
-```
-
-### 2. Crear entorno virtual
-
-```bash
-python3 -m venv venv
-```
-
-> [!NOTE]
-> El entorno virtual mantiene las dependencias aisladas del sistema.
-
-### 3. Activar el entorno virtual
-
-**Linux/macOS:**
-```bash
-source venv/bin/activate
-```
-
-**Windows:**
-```bash
-venv\Scripts\activate
-```
-
-> [!IMPORTANT]
-> Siempre activa el entorno virtual antes de trabajar en el proyecto.
-
-### 4. Instalar dependencias
-
-```bash
-pip install -r requirements.txt
-```
-
-### 5. Configurar variables de entorno
-
-1. Copia el archivo de ejemplo:
-```bash
-cp .env.example .env
-```
-
-2. Edita el archivo `.env` con tus credenciales de PostgreSQL:
-```bash
-nano .env  # o usa tu editor preferido
-```
-
-3. Configura las siguientes variables:
-
-```env
-# Configuración de Base de Datos PostgreSQL
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=tu_usuario
-DB_PASSWORD=tu_contraseña
-DB_NAME=apex_db
-
-# Configuración de la Aplicación
-APP_ENV=development
-```
-
-> [!IMPORTANT]
-> Nunca compartas tu archivo `.env` ni lo subas a Git. Este archivo contiene credenciales sensibles.
-
-> [!TIP]
-> Asegúrate de crear la base de datos en PostgreSQL antes de ejecutar la aplicación:
-> ```sql
-> CREATE DATABASE apex_db;
-> ```
+### Roles disponibles:
+- **admin**: Acceso total al sistema
+- **jefe**: Gestión de su carrera (solicitudes, sinodales, grupos)
+- **servicios**: Gestión operativa (aulas, horarios, calendarios)
 
 ---
 
-## Ejecutar el Proyecto
+## Endpoints de Autenticación
 
-> [!IMPORTANT]
-> **Antes de ejecutar, asegúrate de:**
-> 1. Tener el entorno virtual activado: `source venv/bin/activate` (Linux/macOS) o `venv\Scripts\activate` (Windows)
-> 2. Haber creado la base de datos en PostgreSQL
-> 3. Haber configurado correctamente el archivo `.env`
+### 1. Login
 
-### Modo desarrollo (con auto-reload)
+Autentica un usuario y obtiene un token JWT.
 
-```bash
-fastapi dev
+**Endpoint:** `POST /api/v1/auth/login`
+
+**Request Body:**
+```json
+{
+  "user": "admin",
+  "password": "admin123"
+}
 ```
 
-**Alternativa con Uvicorn:**
-```bash
-uvicorn app.main:app --reload
+**Response (200 OK):**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id_usuario": "admin",
+    "nombre_usuario": "Administrador Sistema",
+    "email": "admin@apex.unsis.edu",
+    "id_carrera": null,
+    "rol": "admin",
+    "is_active": true,
+    "created_at": "2026-01-20T10:00:00",
+    "last_login": "2026-01-20T11:30:00"
+  }
+}
 ```
 
-> [!TIP]
-> El flag `--reload` reinicia automáticamente el servidor cuando detecta cambios en el código.
+**Errores:**
+- `401 Unauthorized`: Credenciales incorrectas
+- `500 Internal Server Error`: Error del servidor
 
-### Modo producción
+### 2. Obtener Usuario Actual
 
-```bash
-fastapi run
+Obtiene información del usuario autenticado.
+
+**Endpoint:** `GET /api/v1/auth/me`
+
+**Headers:**
+```
+Authorization: Bearer <tu_token_jwt>
 ```
 
-**Alternativa con Uvicorn:**
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+**Response (200 OK):**
+```json
+{
+  "id_usuario": "admin",
+  "nombre_usuario": "Administrador Sistema",
+  "email": "admin@apex.unsis.edu",
+  "id_carrera": null,
+  "rol": "admin",
+  "is_active": true,
+  "created_at": "2026-01-20T10:00:00",
+  "last_login": "2026-01-20T11:30:00"
+}
 ```
 
-> [!WARNING]
-> No uses `--reload` en producción, consume recursos adicionales.
+**Errores:**
+- `401 Unauthorized`: Token inválido o expirado
+- `403 Forbidden`: Usuario inactivo
 
 ---
 
-## Probar la Conexión a la Base de Datos
+## Integración con Frontend
 
-Una vez que la aplicación esté corriendo, puedes probar la conexión a PostgreSQL visitando:
+### JavaScript / React / Vue
 
-```
-http://localhost:8000/db-test
-```
+#### 2. Hacer Peticiones Autenticadas
 
-Deberías ver una respuesta JSON confirmando la conexión exitosa.
+```javascript
+async function fetchProtectedData() {
+  const token = localStorage.getItem('token');
+  
+  const response = await fetch('http://localhost:8000/api/v1/solicitudes', {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  });
 
----
+  if (response.status === 401) {
+    // Token expirado - redirigir a login
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+    return;
+  }
 
-## Estructura del Proyecto
-
-```
-apex-backend/
-├── app/
-│   ├── __init__.py
-│   ├── main.py          # 🚀 Aplicación principal FastAPI
-│   ├── config.py        # ⚙️ Configuración y variables de entorno
-│   ├── database.py      # 🗄️ Conexión a PostgreSQL con SQLAlchemy
-│   ├── controller/      # 🎮 Controladores (rutas)
-│   ├── model/           # 📊 Modelos de base de datos
-│   ├── repository/      # 💾 Capa de acceso a datos
-│   └── service/         # 🔧 Lógica de negocio
-├── venv/                # 📦 Entorno virtual (no versionado)
-├── .env                 # 🔐 Variables de entorno (no versionado)
-├── .env.example         # 📋 Plantilla de variables de entorno
-├── .gitignore           # 🚫 Archivos ignorados por Git
-├── requirements.txt     # 📋 Dependencias del proyecto
-└── README.md            # 📖 Documentación
+  return await response.json();
+}
 ```
 
-> [!NOTE]
-> La carpeta `venv/` no se sube a Git gracias al archivo `.gitignore`.
+#### 3. Interceptor para Axios
+
+```javascript
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: 'http://localhost:8000/api/v1',
+});
+
+// Agregar token automáticamente
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Manejar errores de autenticación
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+```
+
+#### 4. Logout
+
+```javascript
+function logout() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  window.location.href = '/login';
+}
+```
 
 ---
 
-## Endpoints Disponibles
+## Usuarios de Prueba
 
-### Documentación Interactiva
+Para desarrollo y pruebas:
 
-Una vez ejecutado el servidor, accede a:
-
-| Documentación | URL |
-|---------------|-----|
-| **Swagger UI** | http://localhost:8000/docs |
-| **ReDoc** | http://localhost:8000/redoc |
-
-> [!TIP]
-> FastAPI genera documentación interactiva automáticamente. Puedes probar los endpoints directamente desde Swagger UI.
-
-### Endpoints de la API
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| `GET` | `/` | Mensaje de bienvenida |
-| `GET` | `/saludo/{nombre}` | Saludo personalizado |
+| Usuario | Contraseña | Rol | Permisos |
+|---------|------------|-----|----------|
+| `admin` | `admin123` | admin | Acceso total |
+| `jefe1` | `jefe123` | jefe | Gestión de carrera SIS |
+| `jefe2` | `jefe123` | jefe | Gestión de carrera IND |
+| `servicios1` | `servicios123` | servicios | Operaciones administrativas |
 
 ---
 
-## Comandos Útiles
+## Endpoints Principales
 
-| Comando | Descripción |
-|---------|-------------|
-| `pip list` | Ver todas las dependencias instaladas |
-| `pip freeze > requirements.txt` | Actualizar archivo de dependencias |
-| `deactivate` | Desactivar el entorno virtual |
-| `pip install --upgrade pip` | Actualizar pip a la última versión |
+### Carreras
+- `GET /api/v1/carreras` - Listar carreras
+- `GET /api/v1/carreras/{id}` - Obtener carrera
+- `POST /api/v1/carreras` - Crear carrera (admin)
+- `PUT /api/v1/carreras/{id}` - Actualizar carrera (admin)
 
-> [!TIP]
-> Ejecuta `pip freeze > requirements.txt` después de instalar nuevos paquetes para mantener actualizado el archivo de dependencias.
+### Solicitudes de Examen
+- `GET /api/v1/solicitudes` - Listar solicitudes
+- `GET /api/v1/solicitudes/{id}` - Obtener solicitud
+- `POST /api/v1/solicitudes` - Crear solicitud
+- `PUT /api/v1/solicitudes/{id}` - Actualizar solicitud
+- `DELETE /api/v1/solicitudes/{id}` - Eliminar solicitud
+
+### Profesores
+- `GET /api/v1/profesores` - Listar profesores
+- `GET /api/v1/profesores/{id}` - Obtener profesor
+- `POST /api/v1/profesores` - Crear profesor
+- `PUT /api/v1/profesores/{id}` - Actualizar profesor
+
+### Aulas
+- `GET /api/v1/aulas` - Listar aulas
+- `GET /api/v1/aulas/{id}` - Obtener aula
+- `POST /api/v1/aulas` - Crear aula (admin)
+- `PUT /api/v1/aulas/{id}` - Actualizar aula (admin)
+
+### Grupos
+- `GET /api/v1/grupos` - Listar grupos
+- `GET /api/v1/grupos/{id}` - Obtener grupo
+- `POST /api/v1/grupos` - Crear grupo
+- `PUT /api/v1/grupos/{id}` - Actualizar grupo
+
+### Materias
+- `GET /api/v1/materias` - Listar materias
+- `GET /api/v1/materias/{id}` - Obtener materia
+- `POST /api/v1/materias` - Crear materia (admin)
+
+### Periodos Académicos
+- `GET /api/v1/periodos` - Listar periodos
+- `GET /api/v1/periodos/{id}` - Obtener periodo
+- `POST /api/v1/periodos` - Crear periodo (admin)
+
+### Tipos de Evaluación
+- `GET /api/v1/evaluaciones` - Listar tipos de evaluación
+- `GET /api/v1/evaluaciones/{id}` - Obtener tipo
+- `POST /api/v1/evaluaciones` - Crear tipo (admin)
+
+### Horarios
+- `GET /api/v1/horarios` - Listar horarios de clases
+- `GET /api/v1/horarios/{id}` - Obtener horario
+- `POST /api/v1/horarios` - Crear horario
+
+### Ventanas de Aplicación
+- `GET /api/v1/ventanas` - Listar ventanas
+- `GET /api/v1/ventanas/{id}` - Obtener ventana
+- `POST /api/v1/ventanas` - Crear ventana (admin)
+
+### Permisos de Sinodales
+- `GET /api/v1/permisos` - Listar permisos
+- `POST /api/v1/permisos` - Crear permiso
+
+### Grupos de Examen
+- `GET /api/v1/grupos-examen` - Listar grupos de examen
+- `POST /api/v1/grupos-examen` - Crear grupo de examen
+
+### Asignaciones
+- `GET /api/v1/asignaciones-aulas` - Listar asignaciones de aulas
+- `GET /api/v1/asignaciones-sinodales` - Listar asignaciones de sinodales
+- `POST /api/v1/asignaciones-aulas` - Crear asignación de aula
+- `POST /api/v1/asignaciones-sinodales` - Crear asignación de sinodal
 
 ---
 
-## Tecnologías
+## Manejo de Errores
 
-<div align="center">
+La API retorna códigos de estado HTTP estándar:
 
-| Tecnología | Descripción |
-|------------|-------------|
-| [**FastAPI**](https://fastapi.tiangolo.com/) | Framework web moderno y rápido |
-| [**Uvicorn**](https://www.uvicorn.org/) | Servidor ASGI de alto rendimiento |
-| [**Python 3.13**](https://www.python.org/) | Lenguaje de programación |
+| Código | Significado | Descripción |
+|--------|-------------|-------------|
+| `200` | OK | Petición exitosa |
+| `201` | Created | Recurso creado exitosamente |
+| `400` | Bad Request | Datos inválidos en la petición |
+| `401` | Unauthorized | Token faltante o inválido |
+| `403` | Forbidden | Sin permisos para este recurso |
+| `404` | Not Found | Recurso no encontrado |
+| `500` | Internal Server Error | Error del servidor |
 
-</div>
-
-> [!NOTE]
-> FastAPI está construido sobre estándares modernos como OpenAPI y JSON Schema.
-
----
-
-## Contribuir
-
-¿Quieres contribuir? ¡Genial! Sigue estos pasos:
-
-1. **Fork** el proyecto
-2. Crea una **rama** para tu feature:
-   ```bash
-   git checkout -b feature/NuevaCaracteristica
-   ```
-3. **Commit** tus cambios:
-   ```bash
-   git commit -m 'Añadir nueva característica'
-   ```
-4. **Push** a la rama:
-   ```bash
-   git push origin feature/NuevaCaracteristica
-   ```
-5. Abre un **Pull Request**
-
-> [!IMPORTANT]
-> Asegúrate de que tu código pase todas las pruebas antes de crear un Pull Request.
+**Formato de error:**
+```json
+{
+  "detail": "Descripción del error"
+}
+```
 
 ---
 
-## Notas
+## CORS
 
-> [!CAUTION]
-> En producción, **NO** uses `allow_origins=["*"]` en CORS. Especifica los dominios permitidos explícitamente.
+El servidor permite peticiones desde los siguientes orígenes:
 
-**Recordatorios importantes:**
--  El entorno virtual (`venv/`) no se versiona en Git
--  Activa siempre el entorno virtual antes de instalar dependencias
--  Revisa la configuración de CORS en `app/main.py` para producción
--  Usa variables de entorno para configuración sensible
+- `http://localhost:3000`
+- `http://127.0.0.1:3000`
+- `http://localhost:3001`
+- `http://127.0.0.1:3001`
 
----
-
-## Licencia
-
-[Especifica tu licencia aquí]
+Si necesitas agregar más orígenes, contacta al equipo de backend.
 
 ---
 
-<div align="center">
+## Documentación Interactiva
 
+Una vez que el servidor esté corriendo, puedes acceder a:
 
-</div>
+- **Swagger UI:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
+
+Estas interfaces permiten probar todos los endpoints directamente desde el navegador.
+
+---
+
+## Ejemplo Completo - React
+
+```jsx
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: 'http://localhost:8000/api/v1',
+});
+
+// Interceptor para agregar token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+function App() {
+  const [user, setUser] = useState(null);
+  const [solicitudes, setSolicitudes] = useState([]);
+
+  // Login
+  const handleLogin = async (username, password) => {
+    try {
+      const { data } = await api.post('/auth/login', {
+        user: username,
+        password: password
+      });
+      
+      localStorage.setItem('token', data.token);
+      setUser(data.user);
+    } catch (error) {
+      console.error('Error en login:', error);
+    }
+  };
+
+  // Obtener solicitudes
+  useEffect(() => {
+    if (user) {
+      api.get('/solicitudes')
+        .then(({ data }) => setSolicitudes(data))
+        .catch(console.error);
+    }
+  }, [user]);
+
+  // Logout
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+  };
+
+  return (
+    <div>
+      {!user ? (
+        <LoginForm onLogin={handleLogin} />
+      ) : (
+        <>
+          <h1>Bienvenido, {user.nombre_usuario}</h1>
+          <button onClick={handleLogout}>Cerrar Sesión</button>
+          <SolicitudesList solicitudes={solicitudes} />
+        </>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## Notas Importantes
+
+1. **Seguridad:**
+   - Nunca expongas el token en la URL
+   - Usa HTTPS en producción
+   - El token expira en 30 días por defecto
+   - No guardes información sensible en localStorage
+
+2. **Tokens:**
+   - Los tokens son válidos por 30 días
+   - No hay endpoint de refresh token actualmente
+   - Al expirar, el usuario debe hacer login nuevamente
+
+3. **Permisos:**
+   - Verifica el rol del usuario antes de mostrar opciones en el frontend
+   - El backend valida permisos en cada petición
+   - Los jefes solo pueden ver/modificar datos de su carrera
+
+---
+
+## Soporte y Documentación Adicional
+
+- **Guía de Instalación:** Ver `docs/QUICKSTART.md`
+- **Documentación Completa:** Ver `docs/AUTH_GUIDE.md`
+- **Diagramas del Sistema:** Ver `docs/DIAGRAMAS.md`
+- **Comandos Útiles:** Ver `docs/COMANDOS.md`
+
+---
