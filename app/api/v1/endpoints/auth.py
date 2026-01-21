@@ -104,7 +104,7 @@ def login(
         )
         
         # Preparar respuesta del usuario (sin contraseña)
-        user_response = UsuarioResponse.from_orm(usuario)
+        user_response = UsuarioResponse.model_validate(usuario)
         
         return TokenResponse(token=access_token, user=user_response)
     except HTTPException:

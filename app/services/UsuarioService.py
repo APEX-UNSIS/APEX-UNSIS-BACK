@@ -1,6 +1,7 @@
 from typing import Optional
 import bcrypt
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.models.Usuario import Usuario
 from app.repositories.UsuarioRepository import UsuarioRepository
@@ -97,28 +98,85 @@ class UsuarioService:
         # Verificar si el usuario ya existe
         existing = self.repository.get_by_id_usuario(usuario_in.id_usuario)
         if existing:
-            raise ValueError("El usuario ya existe")
+            raise ValueError(f"El usuario con ID '{usuario_in.id_usuario}' ya existe")
         
         # Hashear la contraseña antes de guardarla
         usuario_data = usuario_in.dict()
-        usuario_data['contraseña'] = self.get_password_hash(usuario_data['contraseña'])
+        hashed_password = self.get_password_hash(usuario_data['contraseña'])
         
-        # Crear el objeto UsuarioCreate con la contraseña hasheada
-        usuario_create = UsuarioCreate(**usuario_data)
-        return self.repository.create(usuario_create)
+        # Crear el objeto Usuario directamente con la contraseña hasheada
+        # No usar UsuarioCreate porque ya tiene la contraseña hasheada
+        db_usuario = Usuario(
+            id_usuario=usuario_data['id_usuario'],
+            nombre_usuario=usuario_data['nombre_usuario'],
+            contraseña=hashed_password,
+            id_carrera=usuario_data.get('id_carrera'),
+            rol=usuario_data['rol'],
+            is_active=usuario_data.get('is_active', True)
+        )
+        
+        self.repository.db.add(db_usuario)
+        try:
+            self.repository.db.commit()
+            self.repository.db.refresh(db_usuario)
+            return db_usuario
+        except IntegrityError as e:
+            self.repository.db.rollback()
+            raise ValueError(f"El usuario con ID '{usuario_in.id_usuario}' ya existe")
+        except Exception as e:
+            self.repository.db.rollback()
+            raise ValueError(f"Error al crear usuario: {str(e)}")
 
     def update(self, id_usuario: str, usuario_update: UsuarioUpdate) -> Optional[Usuario]:
+        # Obtener el usuario existente
+        db_usuario = self.repository.get_by_id_usuario(id_usuario)
+        if not db_usuario:
+            return None
+        
         update_data = usuario_update.dict(exclude_unset=True)
         
         # Si se actualiza la contraseña, hashearla
         if 'contraseña' in update_data and update_data['contraseña']:
             update_data['contraseña'] = self.get_password_hash(update_data['contraseña'])
         
-        usuario_update_obj = UsuarioUpdate(**update_data)
-        return self.repository.update(id_usuario, usuario_update_obj)
+        # Actualizar los campos
+        for field, value in update_data.items():
+            setattr(db_usuario, field, value)
+        
+        try:
+            self.repository.db.commit()
+            self.repository.db.refresh(db_usuario)
+            return db_usuario
+        except Exception as e:
+            self.repository.db.rollback()
+            raise ValueError(f"Error al actualizar usuario: {str(e)}")
 
-    def delete(self, id_usuario: str) -> Optional[Usuario]:
-        return self.repository.delete(id_usuario)
+    def delete(self, id_usuario: str, current_user_id: str = None) -> Optional[Usuario]:
+        db_usuario = self.repository.get_by_id_usuario(id_usuario)
+        if not db_usuario:
+            return None
+        
+        # Validar que no se elimine a sí mismo (ya validado en el endpoint, pero doble validación)
+        if current_user_id and current_user_id == id_usuario:
+            raise ValueError("No puedes eliminarte a ti mismo")
+        
+        # Validar que no se elimine el último administrador
+        if db_usuario.rol == 'admin':
+            admins = self.repository.get_by_rol('admin', skip=0, limit=1000)
+            admins_activos = [a for a in admins if a.is_active]
+            
+            if len(admins_activos) <= 1:
+                raise ValueError("No se puede eliminar el último administrador del sistema. Debe haber al menos un administrador activo.")
+        
+        try:
+            self.repository.db.delete(db_usuario)
+            self.repository.db.commit()
+            return db_usuario
+        except ValueError:
+            raise
+        except Exception as e:
+            self.repository.db.rollback()
+            raise ValueError(f"Error al eliminar usuario: {str(e)}")
 
     def get_all(self, skip: int = 0, limit: int = 100):
         return self.repository.get_all(skip, limit)

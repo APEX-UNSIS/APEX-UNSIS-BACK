@@ -6,6 +6,7 @@ from app.database import get_db
 from app.repositories.UsuarioRepository import UsuarioRepository
 from app.schemas.UsuarioSchema import Usuario, UsuarioCreate, UsuarioUpdate, UsuarioResponse
 from app.services.UsuarioService import UsuarioService
+from app.api.v1.endpoints.auth import get_current_user
 
 router = APIRouter(prefix="/usuarios", tags=["usuarios"])
 
@@ -46,6 +47,8 @@ def create_usuario(
         return UsuarioResponse.model_validate(usuario_creado)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno al crear usuario: {str(e)}")
 
 
 @router.put("/{id_usuario}", response_model=UsuarioResponse)
@@ -54,21 +57,48 @@ def update_usuario(
     usuario_update: UsuarioUpdate,
     service: UsuarioService = Depends(get_usuario_service)
 ):
-    usuario = service.update(id_usuario, usuario_update)
-    if usuario is None:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    return UsuarioResponse.model_validate(usuario)
+    try:
+        usuario = service.update(id_usuario, usuario_update)
+        if usuario is None:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        return UsuarioResponse.model_validate(usuario)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno al actualizar usuario: {str(e)}")
 
 
 @router.delete("/{id_usuario}", response_model=UsuarioResponse)
 def delete_usuario(
     id_usuario: str,
+    current_user: UsuarioResponse = Depends(get_current_user),
     service: UsuarioService = Depends(get_usuario_service)
 ):
-    usuario = service.delete(id_usuario)
-    if usuario is None:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    return UsuarioResponse.model_validate(usuario)
+    try:
+        # Validar que el usuario actual sea admin
+        if current_user.rol != 'admin':
+            raise HTTPException(
+                status_code=403, 
+                detail="No tienes permiso para eliminar usuarios. Solo los administradores pueden eliminar usuarios."
+            )
+        
+        # Validar que no se elimine a sí mismo
+        if current_user.id_usuario == id_usuario:
+            raise HTTPException(
+                status_code=400,
+                detail="No puedes eliminarte a ti mismo. Por favor, solicita a otro administrador que lo haga."
+            )
+        
+        usuario = service.delete(id_usuario, current_user.id_usuario)
+        if usuario is None:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        return UsuarioResponse.model_validate(usuario)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno al eliminar usuario: {str(e)}")
 
 
 @router.get("/rol/{rol}", response_model=List[UsuarioResponse])
