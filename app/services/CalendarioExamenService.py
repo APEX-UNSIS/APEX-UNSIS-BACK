@@ -79,21 +79,34 @@ class CalendarioExamenService:
         id_periodos_posibles = []
         
         if mes >= 10:  # Octubre, Noviembre, Diciembre
-            # Oct-Dic pertenece al periodo "año-2" (Agosto-Diciembre)
-            id_periodos_posibles = [f"{año}-2"]
+            # Oct-Dic pertenece al periodo "año-2" (Agosto-Diciembre) o formato "año(año+1)A"
+            id_periodos_posibles = [
+                f"{año}-2",  # Formato largo: 2025-2
+                f"{str(año)[-2:]}{str(año+1)[-2:]}A"  # Formato corto: 2526A
+            ]
             semestre_str = f"{año}-{año+1}A"
         elif mes <= 2:  # Enero, Febrero
             # Ene-Feb puede pertenecer al periodo anterior "año-1-2" o "año-1" (si no existe el anterior)
-            # Basado en el semestre A que va de Oct a Feb, debería ser "año-1-2"
-            id_periodos_posibles = [f"{año-1}-2", f"{año}-1"]  # Intentar primero el anterior, luego el actual
+            # Basado en el semestre A que va de Oct a Feb, debería ser "año-1-2" o formato "año-1(año)A"
+            id_periodos_posibles = [
+                f"{año-1}-2",  # Formato largo: 2025-2
+                f"{año}-1",    # Formato largo alternativo: 2026-1
+                f"{str(año-1)[-2:]}{str(año)[-2:]}A"  # Formato corto: 2526A
+            ]
             semestre_str = f"{año-1}-{año}A"
         elif 3 <= mes <= 7:  # Marzo a Julio
-            # Mar-Jul pertenece al periodo "año-1" (Enero-Junio)
-            id_periodos_posibles = [f"{año}-1"]
+            # Mar-Jul pertenece al periodo "año-1" (Enero-Junio) o formato "añoB"
+            id_periodos_posibles = [
+                f"{año}-1",  # Formato largo: 2026-1
+                f"{str(año)[-2:]}B"  # Formato corto: 26B
+            ]
             semestre_str = f"{año}B"
         else:  # Agosto, Septiembre
-            # Ago-Sep pertenece al periodo "año-2" (Agosto-Diciembre)
-            id_periodos_posibles = [f"{año}-2"]
+            # Ago-Sep pertenece al periodo "año-2" (Agosto-Diciembre) o formato "añoB"
+            id_periodos_posibles = [
+                f"{año}-2",  # Formato largo: 2025-2
+                f"{str(año)[-2:]}B"  # Formato corto: 25B
+            ]
             semestre_str = f"{año}B"
         
         # Buscar el periodo en la base de datos (probar todas las opciones posibles)
@@ -102,11 +115,20 @@ class CalendarioExamenService:
             if periodo:
                 return (periodo.id_periodo, semestre_str, periodo.nombre_periodo)
         
-        # Si no se encuentra, buscar por año en nombre_periodo como fallback
+        # Si no se encuentra, buscar por año en nombre_periodo o id_periodo como fallback
         periodos = periodo_repo.get_all()
         for p in periodos:
-            if str(año) in p.nombre_periodo or str(año-1) in p.nombre_periodo:
-                return (p.id_periodo, semestre_str, p.nombre_periodo)
+            # Buscar por año completo o últimos 2 dígitos en id_periodo o nombre_periodo
+            año_2digitos = str(año)[-2:]
+            año_anterior_2digitos = str(año-1)[-2:]
+            
+            if (str(año) in p.nombre_periodo or str(año-1) in p.nombre_periodo or 
+                str(año) in p.id_periodo or str(año-1) in p.id_periodo or
+                año_2digitos in p.id_periodo or año_anterior_2digitos in p.id_periodo):
+                # Verificar que el formato coincida con el semestre esperado
+                if (semestre_str.endswith('A') and 'A' in p.id_periodo.upper()) or \
+                   (semestre_str.endswith('B') and 'B' in p.id_periodo.upper()):
+                    return (p.id_periodo, semestre_str, p.nombre_periodo)
         
         # Si no se encuentra ningún periodo, lanzar error con información útil
         periodos_disponibles = [p.id_periodo for p in periodo_repo.get_all()]
@@ -128,12 +150,15 @@ class CalendarioExamenService:
         """
         Genera un calendario de exámenes para una carrera específica.
         
+        IMPORTANTE: Si ya existe un calendario para el mismo periodo y evaluación, se eliminará
+        automáticamente antes de generar el nuevo para evitar duplicados.
+        
         Args:
             id_carrera: ID de la carrera
             fecha_inicio: Fecha de inicio (se generan 5 días de exámenes)
             id_evaluacion: ID del tipo de evaluación (Parcial 1, 2, 3, Ordinario)
             dias_inhabiles: Lista de fechas donde no se aplicarán exámenes
-            eliminar_existentes: Si True, elimina solicitudes existentes antes de generar
+            eliminar_existentes: (Deprecated) Ya no se usa, siempre se eliminan los existentes del mismo periodo/evaluación
         
         Returns:
             Dict con información del proceso: {
@@ -171,19 +196,56 @@ class CalendarioExamenService:
                 self.db.add(ventana)
                 self.db.flush()
             
-            # 3. Eliminar solicitudes existentes de la carrera si se solicita
-            if eliminar_existentes:
-                solicitudes_existentes = self.solicitud_repo.get_by_periodo_evaluacion(id_periodo, id_evaluacion)
-                horarios_carrera = self.horario_repo.get_by_carrera(id_carrera)
-                horarios_carrera_ids = [h.id_materia for h in horarios_carrera if h.id_periodo == id_periodo]
-                for solicitud in solicitudes_existentes:
-                    if solicitud.id_materia in horarios_carrera_ids:
-                        self._eliminar_solicitud_completa(solicitud.id_horario)
+            # 3. Eliminar solicitudes existentes de la carrera para el mismo periodo y evaluación
+            # Por defecto, siempre eliminamos los existentes para evitar duplicados
+            # Si eliminar_existentes es False, aún así eliminamos para el mismo periodo/evaluación
+            solicitudes_existentes = self.solicitud_repo.get_by_periodo_evaluacion(id_periodo, id_evaluacion)
+            horarios_carrera_temp = self.horario_repo.get_by_carrera(id_carrera, skip=0, limit=10000)
+            horarios_carrera_ids = [h.id_materia for h in horarios_carrera_temp if h.id_periodo == id_periodo]
+            
+            solicitudes_eliminadas = 0
+            for solicitud in solicitudes_existentes:
+                if solicitud.id_materia in horarios_carrera_ids:
+                    self._eliminar_solicitud_completa(solicitud.id_horario)
+                    solicitudes_eliminadas += 1
+            
+            if solicitudes_eliminadas > 0:
                 self.db.commit()
             
-            # 4. Obtener horarios de la carrera para el periodo
-            horarios_carrera = self.horario_repo.get_by_carrera(id_carrera)
+            # 4. Obtener horarios de la carrera para el periodo (sin límite)
+            horarios_carrera = self.horario_repo.get_by_carrera(id_carrera, skip=0, limit=10000)
+            
+            # Analizar periodos presentes en los horarios
+            periodos_presentes = {}
+            for h in horarios_carrera:
+                if h.id_periodo:
+                    if h.id_periodo not in periodos_presentes:
+                        periodos_presentes[h.id_periodo] = []
+                    periodos_presentes[h.id_periodo].append(h.id_grupo)
+            
+            print(f"[DEBUG] Periodos encontrados en horarios de carrera {id_carrera}: {list(periodos_presentes.keys())}")
+            for periodo, grupos in periodos_presentes.items():
+                grupos_unicos_periodo = set(grupos)
+                print(f"[DEBUG]   Periodo {periodo}: {len(grupos_unicos_periodo)} grupos únicos")
+            
             horarios_periodo = [h for h in horarios_carrera if h.id_periodo == id_periodo]
+            
+            print(f"[DEBUG] Horarios obtenidos: {len(horarios_carrera)} total, {len(horarios_periodo)} para periodo {id_periodo}")
+            
+            # Contar grupos únicos en los horarios
+            grupos_unicos = set()
+            for h in horarios_periodo:
+                if h.id_grupo:
+                    grupos_unicos.add(h.id_grupo)
+            print(f"[DEBUG] Grupos únicos en horarios del periodo {id_periodo}: {len(grupos_unicos)} grupos - {sorted(grupos_unicos)}")
+            
+            # Verificar todos los grupos de la carrera
+            grupos_carrera = self.grupo_repo.get_by_carrera(id_carrera, skip=0, limit=10000)
+            grupos_ids_carrera = [g.id_grupo for g in grupos_carrera]
+            grupos_sin_horarios = set(grupos_ids_carrera) - grupos_unicos
+            print(f"[DEBUG] Total grupos en carrera {id_carrera}: {len(grupos_ids_carrera)}")
+            if grupos_sin_horarios:
+                print(f"[DEBUG] ⚠️ Grupos SIN horarios para periodo {id_periodo}: {sorted(grupos_sin_horarios)}")
             
             if not horarios_periodo:
                 # Hacer commit de la ventana creada antes de retornar
@@ -196,50 +258,238 @@ class CalendarioExamenService:
                     'semestre_determinado': semestre_str
                 }
             
-            # 5. Agrupar por materia
-            materias_grupos = self._agrupar_materias_grupos(horarios_periodo)
+            # 5. Incluir TODOS los grupos de la carrera, incluso si no tienen horarios para el periodo actual
+            # Estrategia: 
+            # 1. Para grupos con horarios del periodo actual: usar esos horarios
+            # 2. Para grupos sin horarios del periodo actual: buscar sus horarios en otros periodos y usarlos como referencia
+            grupos_con_horarios_periodo = set(grupos_unicos)
+            grupos_sin_horarios_periodo_actual = grupos_sin_horarios
             
-            # 6. Obtener recursos disponibles
+            # Buscar horarios de grupos que no tienen horarios para el periodo actual
+            horarios_otros_periodos = []
+            grupos_con_horarios_otros_periodos = set()
+            
+            if grupos_sin_horarios_periodo_actual:
+                print(f"[DEBUG] Buscando horarios de {len(grupos_sin_horarios_periodo_actual)} grupos sin horarios para periodo {id_periodo}...")
+                grupos_procesados = 0
+                for grupo_id in grupos_sin_horarios_periodo_actual:
+                    # Buscar cualquier horario de este grupo en cualquier periodo
+                    horarios_grupo = self.horario_repo.get_by_grupo(grupo_id, skip=0, limit=10000)
+                    if horarios_grupo:
+                        grupos_procesados += 1
+                        grupos_con_horarios_otros_periodos.add(grupo_id)
+                        print(f"[DEBUG]   Grupo {grupo_id}: encontró {len(horarios_grupo)} horarios en otros periodos")
+                        
+                        # Agrupar por materia para incluir todas las materias del grupo
+                        horarios_por_materia = {}
+                        for h in horarios_grupo:
+                            if h.id_materia and h.id_periodo:
+                                if h.id_materia not in horarios_por_materia:
+                                    horarios_por_materia[h.id_materia] = []
+                                horarios_por_materia[h.id_materia].append(h)
+                        
+                        # Para cada materia, usar el horario del periodo más reciente
+                        materias_incluidas = 0
+                        for id_materia, horarios_materia in horarios_por_materia.items():
+                            horarios_materia_sorted = sorted(horarios_materia, key=lambda h: h.id_periodo or '', reverse=True)
+                            horario_referencia = horarios_materia_sorted[0]
+                            # Usar el horario original tal cual - el código de agrupación acepta horarios de cualquier periodo
+                            horarios_otros_periodos.append(horario_referencia)
+                            materias_incluidas += 1
+                            print(f"[DEBUG]     Materia {id_materia}: usando horario de periodo {horario_referencia.id_periodo}")
+                        print(f"[DEBUG]   Grupo {grupo_id}: {materias_incluidas} materias incluidas")
+                    else:
+                        print(f"[DEBUG]   Grupo {grupo_id}: NO tiene horarios en ningún periodo")
+                
+                print(f"[DEBUG] Resumen: {grupos_procesados} de {len(grupos_sin_horarios_periodo_actual)} grupos encontraron horarios en otros periodos")
+                
+                print(f"[DEBUG]   Encontrados horarios de referencia para {len(grupos_con_horarios_otros_periodos)} grupos en otros periodos")
+            
+            grupos_sin_horarios_total = grupos_sin_horarios_periodo_actual - grupos_con_horarios_otros_periodos
+            if grupos_sin_horarios_total:
+                print(f"[DEBUG] ⚠️ {len(grupos_sin_horarios_total)} grupos NO tienen horarios en NINGÚN periodo: {sorted(list(grupos_sin_horarios_total))[:10]}{'...' if len(grupos_sin_horarios_total) > 10 else ''}")
+            
+            # Combinar horarios del periodo actual con horarios de referencia de otros periodos
+            horarios_para_procesar = horarios_periodo + horarios_otros_periodos
+            print(f"[DEBUG] Total horarios a procesar: {len(horarios_periodo)} del periodo {id_periodo} + {len(horarios_otros_periodos)} de referencia = {len(horarios_para_procesar)}")
+            
+            # 6. Agrupar por materia
+            materias_grupos = self._agrupar_materias_grupos(horarios_para_procesar)
+            
+            # 7. Obtener recursos disponibles
             aulas_disponibles = self.aula_repo.get_disponibles()
             asignaciones_existentes = self._obtener_asignaciones_en_ventana(ventana)
             
-            # 7. Calcular días disponibles (5 días hábiles, excluyendo días inhábiles)
+            # 7. Calcular días disponibles: necesitamos un día por cada materia
+            # Día 1: Primera materia para todos los grupos
+            # Día 2: Segunda materia para todos los grupos
+            # etc.
+            materias_count = len(materias_grupos)
             dias_disponibles = self._calcular_dias_disponibles(fecha_inicio, dias_inhabiles, ventana)
             
-            if len(dias_disponibles) < len(materias_grupos):
-                advertencias = [f"Hay {len(materias_grupos)} materias pero solo {len(dias_disponibles)} días disponibles"]
+            # Necesitamos exactamente un día por cada materia
+            dias_necesarios = materias_count
+            
+            # Extender días disponibles si es necesario
+            dias_inhabiles_set = set(dias_inhabiles) if dias_inhabiles else set()
+            dias_extras_agregados = 0
+            fecha_actual = dias_disponibles[-1] + timedelta(days=1) if dias_disponibles else fecha_inicio
+            
+            while len(dias_disponibles) < dias_necesarios and fecha_actual <= ventana.fecha_fin_examenes:
+                if fecha_actual.weekday() < 5 and fecha_actual not in dias_inhabiles_set:
+                    dias_disponibles.append(fecha_actual)
+                    dias_extras_agregados += 1
+                    print(f"[DEBUG] Día adicional agregado: {fecha_actual} para acomodar {len(dias_disponibles)}/{dias_necesarios} materias")
+                fecha_actual += timedelta(days=1)
+            
+            if len(dias_disponibles) < materias_count:
+                advertencias = [f"Hay {materias_count} materias pero solo {len(dias_disponibles)} días disponibles. {materias_count - len(dias_disponibles)} materias pueden no tener examen programado."]
             else:
                 advertencias = []
+                if dias_extras_agregados > 0:
+                    print(f"[DEBUG] Se agregaron {dias_extras_agregados} días adicionales para acomodar todas las {materias_count} materias")
             
-            # 8. Generar solicitudes para cada materia (una por día)
+            # 8. Generar solicitudes: un examen por día para todos los grupos
+            # Día 1: Primera materia para todos los grupos (misma hora, diferentes aulas)
+            # Día 2: Segunda materia para todos los grupos (misma hora, diferentes aulas)
+            # etc.
             solicitudes_creadas = 0
             conflictos = []
-            materia_dia_index = 0
             
-            for id_materia, grupos_info in materias_grupos.items():
-                if materia_dia_index >= len(dias_disponibles):
-                    conflictos.append(f"Materia {grupos_info['nombre']}: No hay días disponibles")
+            # Convertir el diccionario de materias a una lista ordenada para tener un orden consistente
+            materias_lista = list(materias_grupos.items())
+            
+            # Para cada índice de materia (0, 1, 2, ...), asignar el mismo día
+            for materia_index, (id_materia, grupos_info) in enumerate(materias_lista):
+                # Cada materia va en un día diferente
+                if materia_index >= len(dias_disponibles):
+                    conflictos.append(f"Materia {grupos_info['nombre']}: No hay días disponibles (se necesitan {materia_index + 1} días pero solo hay {len(dias_disponibles)})")
                     continue
                 
-                fecha_examen = dias_disponibles[materia_dia_index]
+                fecha_examen = dias_disponibles[materia_index]
                 
-                resultado = self._crear_solicitud_examen_fecha(
-                    id_materia=id_materia,
-                    grupos_info=grupos_info,
-                    id_periodo=id_periodo,
-                    id_evaluacion=id_evaluacion,
-                    fecha_examen=fecha_examen,
-                    aulas_disponibles=aulas_disponibles,
-                    asignaciones_existentes=asignaciones_existentes
-                )
+                # Determinar la hora una vez para todos los grupos (misma hora para todos)
+                hora_determinada = None
+                horario_index_usado = None
                 
-                if resultado['exito']:
-                    solicitudes_creadas += 1
-                    materia_dia_index += 1
+                # Intentar diferentes horarios dentro del mismo día si es necesario
+                for horario_intento in range(len(self.HORARIOS_EXAMEN)):
+                    resultado_hora = self._encontrar_hora_disponible(
+                        grupos_info['horario_referencia'],
+                        fecha_examen,
+                        grupos_info['total_alumnos'],
+                        aulas_disponibles,
+                        asignaciones_existentes,
+                        horario_intento
+                    )
+                    
+                    if resultado_hora:
+                        hora_inicio, hora_fin = resultado_hora
+                        hora_determinada = (hora_inicio, hora_fin)
+                        horario_index_usado = horario_intento
+                        print(f"[DEBUG] Hora determinada para materia {grupos_info['nombre']}: {hora_inicio}-{hora_fin} (horario {horario_intento})")
+                        break
+                
+                if not hora_determinada:
+                    conflictos.append(f"Materia {grupos_info['nombre']} (día {fecha_examen}): No se encontró hora disponible")
+                    continue
+                
+                hora_inicio, hora_fin = hora_determinada
+                
+                # Crear una solicitud por grupo, todas con la misma hora pero diferentes aulas
+                grupos_con_exito = 0
+                grupos_con_conflicto = []
+                aulas_usadas = set()  # Para evitar asignar la misma aula a múltiples grupos
+                
+                for grupo_info in grupos_info['grupos']:
+                    # Crear solicitud solo para este grupo
+                    grupo_info_individual = {
+                        'nombre': grupos_info['nombre'],
+                        'grupos': [grupo_info],  # Solo este grupo
+                        'total_alumnos': grupo_info['numero_alumnos'],
+                        'horario_referencia': grupos_info['horario_referencia']
+                    }
+                    
+                    # Generar ID único para esta solicitud (incluir grupo en el ID)
+                    id_horario_grupo = self._generar_id_solicitud(id_periodo, id_evaluacion, f"{id_materia}-{grupo_info['id_grupo']}")
+                    
+                    # Buscar aula disponible para este grupo específico
+                    aula_disponible = self._buscar_aula_disponible_para_grupo(
+                        fecha_examen,
+                        hora_inicio,
+                        hora_fin,
+                        grupo_info['numero_alumnos'],
+                        aulas_disponibles,
+                        asignaciones_existentes,
+                        aulas_usadas  # Excluir aulas ya usadas para otros grupos
+                    )
+                    
+                    if not aula_disponible:
+                        grupos_con_conflicto.append(f"Grupo {grupo_info['id_grupo']}: No se encontró aula disponible")
+                        continue
+                    
+                    aulas_usadas.add(aula_disponible)
+                    
+                    # Crear la solicitud para este grupo
+                    resultado = self._crear_solicitud_examen_individual(
+                        id_horario=id_horario_grupo,
+                        id_materia=id_materia,
+                        grupo_info=grupo_info,
+                        horario_referencia=grupos_info['horario_referencia'],
+                        id_periodo=id_periodo,
+                        id_evaluacion=id_evaluacion,
+                        fecha_examen=fecha_examen,
+                        hora_inicio=hora_inicio,
+                        hora_fin=hora_fin,
+                        id_aula=aula_disponible,
+                        aulas_disponibles=aulas_disponibles,
+                        asignaciones_existentes=asignaciones_existentes
+                    )
+                    
+                    if resultado['exito']:
+                        solicitudes_creadas += 1
+                        grupos_con_exito += 1
+                        print(f"[DEBUG] Grupo {grupo_info['id_grupo']} de materia {grupos_info['nombre']} programado para {fecha_examen} {hora_inicio}-{hora_fin} en aula {aula_disponible}")
+                    else:
+                        grupos_con_conflicto.append(f"Grupo {grupo_info['id_grupo']}: {resultado['error']}")
+                
+                # Reportar conflictos si los hay
+                if grupos_con_conflicto:
+                    conflictos.append(f"Materia {grupos_info['nombre']} (día {fecha_examen}): {len(grupos_con_conflicto)} grupos con conflictos - {', '.join(grupos_con_conflicto)}")
+                
+                if grupos_con_exito == 0:
+                    conflictos.append(f"Materia {grupos_info['nombre']} (día {fecha_examen}): No se pudo programar ningún grupo")
                 else:
-                    conflictos.append(f"Materia {grupos_info['nombre']} (día {fecha_examen}): {resultado['error']}")
+                    print(f"[DEBUG] Materia {grupos_info['nombre']}: {grupos_con_exito}/{len(grupos_info['grupos'])} grupos programados exitosamente")
             
             self.db.commit()
+            
+            # Log final con resumen completo
+            print(f"[DEBUG] ========== RESUMEN FINAL DE GENERACIÓN ==========")
+            print(f"[DEBUG] Solicitudes creadas: {solicitudes_creadas}")
+            print(f"[DEBUG] Conflictos: {len(conflictos)}")
+            if conflictos:
+                print(f"[DEBUG]   Detalles de conflictos:")
+                for i, conflicto in enumerate(conflictos[:10], 1):
+                    print(f"[DEBUG]     {i}. {conflicto}")
+                if len(conflictos) > 10:
+                    print(f"[DEBUG]     ... y {len(conflictos) - 10} más")
+            print(f"[DEBUG] Advertencias: {len(advertencias)}")
+            if advertencias:
+                for advertencia in advertencias:
+                    print(f"[DEBUG]   - {advertencia}")
+            
+            # Verificar cuántos grupos únicos se incluyeron en las solicitudes creadas
+            solicitudes_creadas_objs = self.solicitud_repo.get_by_periodo_evaluacion(id_periodo, id_evaluacion)
+            grupos_en_solicitudes = set()
+            for solicitud in solicitudes_creadas_objs:
+                if solicitud.id_materia in materias_grupos:
+                    grupos_materia = materias_grupos[solicitud.id_materia]['grupos']
+                    for grupo_info in grupos_materia:
+                        grupos_en_solicitudes.add(grupo_info['id_grupo'])
+            print(f"[DEBUG] Grupos únicos incluidos en solicitudes creadas: {len(grupos_en_solicitudes)}")
+            print(f"[DEBUG] IDs de grupos: {sorted(list(grupos_en_solicitudes))[:20]}{'...' if len(grupos_en_solicitudes) > 20 else ''}")
+            print(f"[DEBUG] ================================================")
             
             return {
                 'solicitudes_creadas': solicitudes_creadas,
@@ -292,6 +542,9 @@ class CalendarioExamenService:
         materias_dict = {}
         
         for horario in horarios:
+            if not horario.id_materia or not horario.id_grupo:
+                continue  # Saltar horarios sin materia o grupo válido
+                
             id_materia = horario.id_materia
             if id_materia not in materias_dict:
                 materias_dict[id_materia] = {
@@ -308,10 +561,23 @@ class CalendarioExamenService:
                 'horario': horario
             }
             
-            # Evitar duplicados
-            if grupo_info['id_grupo'] not in [g['id_grupo'] for g in materias_dict[id_materia]['grupos']]:
+            # Evitar duplicados por id_grupo
+            grupos_ids_existentes = [g['id_grupo'] for g in materias_dict[id_materia]['grupos']]
+            if grupo_info['id_grupo'] not in grupos_ids_existentes:
                 materias_dict[id_materia]['grupos'].append(grupo_info)
                 materias_dict[id_materia]['total_alumnos'] += grupo_info['numero_alumnos']
+        
+        # Log para depuración
+        total_grupos = sum(len(info['grupos']) for info in materias_dict.values())
+        print(f"[DEBUG] _agrupar_materias_grupos: {len(materias_dict)} materias, {total_grupos} grupos únicos en total")
+        grupos_por_materia_count = {}
+        for id_materia, info in materias_dict.items():
+            grupos_nombres = [g['nombre'] for g in info['grupos']]
+            grupos_ids = [g['id_grupo'] for g in info['grupos']]
+            print(f"[DEBUG]   Materia {id_materia} ({info['nombre']}): {len(info['grupos'])} grupos - IDs: {grupos_ids}, Nombres: {grupos_nombres}")
+            grupos_por_materia_count[id_materia] = len(info['grupos'])
+        
+        print(f"[DEBUG] Resumen: {sum(grupos_por_materia_count.values())} grupos totales distribuidos en {len(materias_dict)} materias")
         
         return materias_dict
     
@@ -343,26 +609,30 @@ class CalendarioExamenService:
         id_evaluacion: str,
         fecha_examen: date,
         aulas_disponibles: List,
-        asignaciones_existentes: Dict
+        asignaciones_existentes: Dict,
+        horario_preferido_index: Optional[int] = None
     ) -> Dict:
         """
         Crea una solicitud de examen para una materia en una fecha específica.
         """
         try:
             # 1. Determinar hora (usar horario del horario regular o estándar)
-            hora_inicio, hora_fin = self._encontrar_hora_disponible(
+            resultado_hora = self._encontrar_hora_disponible(
                 grupos_info['horario_referencia'],
                 fecha_examen,
                 grupos_info['total_alumnos'],
                 aulas_disponibles,
-                asignaciones_existentes
+                asignaciones_existentes,
+                horario_preferido_index
             )
             
-            if not hora_inicio or not hora_fin:
+            if resultado_hora is None:
                 return {
                     'exito': False,
                     'error': 'No se encontró hora disponible para la fecha especificada'
                 }
+            
+            hora_inicio, hora_fin = resultado_hora
             
             # 2. Generar ID único para la solicitud
             id_horario = self._generar_id_solicitud(id_periodo, id_evaluacion, id_materia)
@@ -384,6 +654,8 @@ class CalendarioExamenService:
             self.db.flush()
             
             # 4. Asociar grupos (ID compacto para caber en VARCHAR(20))
+            grupos_asociados = 0
+            grupos_ids_asociados = []
             for grupo_info in grupos_info['grupos']:
                 hash_input = f"{id_horario}-{grupo_info['id_grupo']}"
                 hash_obj = hashlib.md5(hash_input.encode())
@@ -395,6 +667,11 @@ class CalendarioExamenService:
                 )
                 grupo_examen = GrupoExamen(**grupo_examen_data.dict())
                 self.db.add(grupo_examen)
+                grupos_asociados += 1
+                grupos_ids_asociados.append(grupo_info['id_grupo'])
+            
+            print(f"[DEBUG] Solicitud {id_horario} para materia {id_materia} ({grupos_info['nombre']}): {grupos_asociados} grupos asociados de {len(grupos_info['grupos'])} grupos en la materia")
+            print(f"[DEBUG]   Grupos asociados: {grupos_ids_asociados}")
             
             # 5. Asignar aula y aplicador
             aula_aplicador = self._asignar_aula_y_aplicador(
@@ -553,12 +830,28 @@ class CalendarioExamenService:
         fecha_examen: date,
         total_alumnos: int,
         aulas_disponibles: List,
-        asignaciones_existentes: Dict
+        asignaciones_existentes: Dict,
+        horario_preferido_index: Optional[int] = None
     ) -> Optional[Tuple[time, time]]:
         """
         Encuentra una hora disponible para el examen en la fecha especificada.
-        Intenta primero con el horario regular, luego con horarios estándar.
+        Si se proporciona horario_preferido_index, intenta usar ese horario específico primero.
         """
+        # Si se especifica un horario preferido, intentar usarlo primero
+        if horario_preferido_index is not None and 0 <= horario_preferido_index < len(self.HORARIOS_EXAMEN):
+            hora_inicio, hora_fin = self.HORARIOS_EXAMEN[horario_preferido_index]
+            aula_disponible = self._buscar_aula_disponible(
+                fecha_examen,
+                hora_inicio,
+                hora_fin,
+                total_alumnos,
+                aulas_disponibles,
+                asignaciones_existentes
+            )
+            
+            if aula_disponible:
+                return (hora_inicio, hora_fin)
+        
         # Intentar primero con el horario regular si el día de la semana coincide
         if fecha_examen.weekday() == horario_referencia.dia_semana:
             hora_inicio = horario_referencia.hora_inicio
@@ -577,7 +870,11 @@ class CalendarioExamenService:
                 return (hora_inicio, hora_fin)
         
         # Si no funciona con el horario regular, intentar con horarios estándar
-        for hora_inicio, hora_fin in self.HORARIOS_EXAMEN:
+        # Si ya intentamos el preferido, saltarlo
+        for idx, (hora_inicio, hora_fin) in enumerate(self.HORARIOS_EXAMEN):
+            if horario_preferido_index is not None and idx == horario_preferido_index:
+                continue  # Ya lo intentamos arriba
+            
             aula_disponible = self._buscar_aula_disponible(
                 fecha_examen,
                 hora_inicio,
@@ -603,8 +900,13 @@ class CalendarioExamenService:
     ) -> Optional[str]:
         """
         Busca un aula disponible que cumpla con la capacidad y no tenga conflictos.
+        Primero intenta aulas que cumplan exactamente la capacidad, luego permite flexibilidad.
         """
-        for aula in aulas_disponibles:
+        # Ordenar aulas por capacidad (mayor primero)
+        aulas_ordenadas = sorted(aulas_disponibles, key=lambda a: a.capacidad, reverse=True)
+        
+        # Primera pasada: buscar aulas que cumplan exactamente o excedan la capacidad
+        for aula in aulas_ordenadas:
             if aula.capacidad < capacidad_necesaria:
                 continue
             
@@ -624,7 +926,256 @@ class CalendarioExamenService:
             if not conflictos:
                 return aula.id_aula
         
+        # Segunda pasada: si no encontramos aula ideal, permitir aulas con capacidad
+        # hasta 20% menor (para grupos grandes que pueden dividirse o ajustarse)
+        capacidad_minima = max(1, int(capacidad_necesaria * 0.8))
+        for aula in aulas_ordenadas:
+            if aula.capacidad < capacidad_minima:
+                continue
+            
+            # Verificar si está ocupada
+            key = (fecha, hora_inicio, aula.id_aula)
+            if key in asignaciones_existentes:
+                continue
+            
+            # Verificar conflictos adicionales
+            conflictos = self.asignacion_aula_repo.get_by_aula_fecha_hora(
+                aula.id_aula,
+                fecha,
+                hora_inicio,
+                hora_fin
+            )
+            
+            if not conflictos:
+                print(f"[DEBUG] Aula {aula.id_aula} seleccionada con capacidad {aula.capacidad} (necesaria: {capacidad_necesaria}) - capacidad ligeramente menor aceptada")
+                return aula.id_aula
+        
+        # Tercera pasada: si aún no encontramos aula, intentar con cualquier aula disponible
+        # sin verificar capacidad (último recurso para evitar conflictos)
+        for aula in aulas_ordenadas:
+            # Verificar si está ocupada
+            key = (fecha, hora_inicio, aula.id_aula)
+            if key in asignaciones_existentes:
+                continue
+            
+            # Verificar conflictos adicionales
+            conflictos = self.asignacion_aula_repo.get_by_aula_fecha_hora(
+                aula.id_aula,
+                fecha,
+                hora_inicio,
+                hora_fin
+            )
+            
+            if not conflictos:
+                print(f"[DEBUG] ⚠️ Aula {aula.id_aula} seleccionada con capacidad {aula.capacidad} (necesaria: {capacidad_necesaria}) - sin verificar capacidad (último recurso)")
+                return aula.id_aula
+        
         return None
+    
+    def _buscar_aula_disponible_para_grupo(
+        self,
+        fecha: date,
+        hora_inicio: time,
+        hora_fin: time,
+        capacidad_necesaria: int,
+        aulas_disponibles: List,
+        asignaciones_existentes: Dict,
+        aulas_excluidas: set = None
+    ) -> Optional[str]:
+        """
+        Busca un aula disponible para un grupo específico, excluyendo aulas ya usadas por otros grupos.
+        """
+        if aulas_excluidas is None:
+            aulas_excluidas = set()
+        
+        # Ordenar aulas por capacidad (mayor primero)
+        aulas_ordenadas = sorted(aulas_disponibles, key=lambda a: a.capacidad, reverse=True)
+        
+        # Primera pasada: buscar aulas que cumplan exactamente o excedan la capacidad
+        for aula in aulas_ordenadas:
+            if aula.id_aula in aulas_excluidas:
+                continue  # Excluir aulas ya usadas por otros grupos
+            
+            if aula.capacidad < capacidad_necesaria:
+                continue
+            
+            # Verificar si está ocupada
+            key = (fecha, hora_inicio, aula.id_aula)
+            if key in asignaciones_existentes:
+                continue
+            
+            # Verificar conflictos adicionales
+            conflictos = self.asignacion_aula_repo.get_by_aula_fecha_hora(
+                aula.id_aula,
+                fecha,
+                hora_inicio,
+                hora_fin
+            )
+            
+            if not conflictos:
+                return aula.id_aula
+        
+        # Segunda pasada: permitir aulas con capacidad hasta 20% menor
+        capacidad_minima = max(1, int(capacidad_necesaria * 0.8))
+        for aula in aulas_ordenadas:
+            if aula.id_aula in aulas_excluidas:
+                continue
+            
+            if aula.capacidad < capacidad_minima:
+                continue
+            
+            # Verificar si está ocupada
+            key = (fecha, hora_inicio, aula.id_aula)
+            if key in asignaciones_existentes:
+                continue
+            
+            # Verificar conflictos adicionales
+            conflictos = self.asignacion_aula_repo.get_by_aula_fecha_hora(
+                aula.id_aula,
+                fecha,
+                hora_inicio,
+                hora_fin
+            )
+            
+            if not conflictos:
+                print(f"[DEBUG] Aula {aula.id_aula} seleccionada con capacidad {aula.capacidad} (necesaria: {capacidad_necesaria}) - capacidad ligeramente menor aceptada")
+                return aula.id_aula
+        
+        # Tercera pasada: cualquier aula disponible sin verificar capacidad
+        for aula in aulas_ordenadas:
+            if aula.id_aula in aulas_excluidas:
+                continue
+            
+            # Verificar si está ocupada
+            key = (fecha, hora_inicio, aula.id_aula)
+            if key in asignaciones_existentes:
+                continue
+            
+            # Verificar conflictos adicionales
+            conflictos = self.asignacion_aula_repo.get_by_aula_fecha_hora(
+                aula.id_aula,
+                fecha,
+                hora_inicio,
+                hora_fin
+            )
+            
+            if not conflictos:
+                print(f"[DEBUG] ⚠️ Aula {aula.id_aula} seleccionada con capacidad {aula.capacidad} (necesaria: {capacidad_necesaria}) - sin verificar capacidad (último recurso)")
+                return aula.id_aula
+        
+        return None
+    
+    def _crear_solicitud_examen_individual(
+        self,
+        id_horario: str,
+        id_materia: str,
+        grupo_info: Dict,
+        horario_referencia: HorarioClase,
+        id_periodo: str,
+        id_evaluacion: str,
+        fecha_examen: date,
+        hora_inicio: time,
+        hora_fin: time,
+        id_aula: str,
+        aulas_disponibles: List,
+        asignaciones_existentes: Dict
+    ) -> Dict:
+        """
+        Crea una solicitud de examen para un solo grupo con hora y aula ya determinadas.
+        """
+        try:
+            # 1. Crear solicitud de examen
+            solicitud_data = SolicitudExamenCreate(
+                id_horario=id_horario,
+                id_periodo=id_periodo,
+                id_evaluacion=id_evaluacion,
+                id_materia=id_materia,
+                fecha_examen=fecha_examen,
+                hora_inicio=hora_inicio,
+                hora_fin=hora_fin,
+                estado=0  # Pendiente
+            )
+            
+            solicitud = SolicitudExamen(**solicitud_data.dict())
+            self.db.add(solicitud)
+            self.db.flush()
+            
+            # 2. Asociar grupo
+            hash_input = f"{id_horario}-{grupo_info['id_grupo']}"
+            hash_obj = hashlib.md5(hash_input.encode())
+            id_examen_grupo = f"EG{hash_obj.hexdigest()[:18].upper()}"
+            grupo_examen_data = GrupoExamenCreate(
+                id_examen_grupo=id_examen_grupo,
+                id_horario=id_horario,
+                id_grupo=grupo_info['id_grupo']
+            )
+            grupo_examen = GrupoExamen(**grupo_examen_data.dict())
+            self.db.add(grupo_examen)
+            
+            # 3. Asignar aula y aplicador
+            # Buscar profesor aplicador disponible
+            id_aplicador = None
+            if horario_referencia and hasattr(horario_referencia, 'id_profesor'):
+                id_aplicador = horario_referencia.id_profesor
+            
+            # Verificar si el profesor está disponible
+            if id_aplicador:
+                asignaciones_profesor = self.asignacion_aula_repo.get_by_profesor_aplicador(id_aplicador)
+                for asignacion in asignaciones_profesor:
+                    solicitud_prof = self.solicitud_repo.get_by_id(asignacion.id_horario)
+                    if solicitud_prof and solicitud_prof.fecha_examen == fecha_examen:
+                        if solicitud_prof.hora_inicio < hora_fin and solicitud_prof.hora_fin > hora_inicio:
+                            # El profesor está ocupado, buscar otro
+                            id_aplicador = self._buscar_aplicador_disponible(fecha_examen, hora_inicio, hora_fin)
+                            break
+            
+            if not id_aplicador:
+                id_aplicador = self._buscar_aplicador_disponible(fecha_examen, hora_inicio, hora_fin)
+            
+            if not id_aplicador:
+                self.db.delete(solicitud)
+                return {
+                    'exito': False,
+                    'error': 'No se encontró profesor aplicador disponible'
+                }
+            
+            # Crear asignación de aula
+            hash_input_aula = f"{id_horario}-{id_aula}"
+            hash_obj_aula = hashlib.md5(hash_input_aula.encode())
+            id_examen_aula = f"AA{hash_obj_aula.hexdigest()[:18].upper()}"
+            asignacion_data = AsignacionAulaCreate(
+                id_examen_aula=id_examen_aula,
+                id_horario=id_horario,
+                id_aula=id_aula,
+                id_profesor_aplicador=id_aplicador
+            )
+            
+            asignacion = AsignacionAula(**asignacion_data.dict())
+            self.db.add(asignacion)
+            
+            # 4. Asignar sinodal
+            self._asignar_sinodal(
+                id_horario,
+                id_materia,
+                fecha_examen,
+                hora_inicio,
+                hora_fin
+            )
+            
+            # Actualizar asignaciones existentes para evitar conflictos
+            asignaciones_existentes[(fecha_examen, hora_inicio, id_aula)] = id_horario
+            
+            return {
+                'exito': True,
+                'id_horario': id_horario
+            }
+            
+        except Exception as e:
+            self.db.rollback()
+            return {
+                'exito': False,
+                'error': str(e)
+            }
     
     def _asignar_aula_y_aplicador(
         self,

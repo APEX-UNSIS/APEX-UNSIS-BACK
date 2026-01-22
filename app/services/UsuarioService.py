@@ -95,10 +95,41 @@ class UsuarioService:
         return self.repository.get_by_nombre_usuario(nombre_usuario)
 
     def create(self, usuario_in: UsuarioCreate) -> Usuario:
-        # Verificar si el usuario ya existe
-        existing = self.repository.get_by_id_usuario(usuario_in.id_usuario)
-        if existing:
-            raise ValueError(f"El usuario con ID '{usuario_in.id_usuario}' ya existe")
+        # Validar rol
+        roles_validos = ['admin', 'jefe', 'servicios']
+        if usuario_in.rol not in roles_validos:
+            raise ValueError(f"Rol inválido: '{usuario_in.rol}'. Los roles válidos son: {', '.join(roles_validos)}")
+        
+        # Verificar si el usuario ya existe por ID
+        existing_by_id = self.repository.get_by_id_usuario(usuario_in.id_usuario)
+        if existing_by_id:
+            raise ValueError(
+                f"El usuario con ID '{usuario_in.id_usuario}' ya existe. "
+                f"Usuario existente: {existing_by_id.nombre_usuario} (Rol: {existing_by_id.rol}). "
+                f"Por favor, usa un ID diferente."
+            )
+        
+        # Verificar si el nombre de usuario ya existe
+        existing_by_nombre = self.repository.get_by_nombre_usuario(usuario_in.nombre_usuario)
+        if existing_by_nombre:
+            raise ValueError(
+                f"El nombre de usuario '{usuario_in.nombre_usuario}' ya está en uso. "
+                f"Usuario existente: {existing_by_nombre.id_usuario} (Rol: {existing_by_nombre.rol}). "
+                f"Por favor, usa un nombre diferente."
+            )
+        
+        # Normalizar id_carrera: convertir cadenas vacías a None
+        id_carrera_normalizado = usuario_in.id_carrera
+        if id_carrera_normalizado == '' or id_carrera_normalizado is None:
+            id_carrera_normalizado = None
+        
+        # Validar que usuarios con rol 'servicios' no tengan carrera asignada
+        if usuario_in.rol == 'servicios' and id_carrera_normalizado:
+            raise ValueError("Los usuarios con rol 'servicios' no deben tener una carrera asignada. Por favor, deja el campo 'id_carrera' vacío.")
+        
+        # Validar que usuarios con rol 'jefe' tengan carrera asignada
+        if usuario_in.rol == 'jefe' and not id_carrera_normalizado:
+            raise ValueError("Los usuarios con rol 'jefe' deben tener una carrera asignada. Por favor, especifica un 'id_carrera'.")
         
         # Hashear la contraseña antes de guardarla
         usuario_data = usuario_in.dict()
@@ -106,11 +137,13 @@ class UsuarioService:
         
         # Crear el objeto Usuario directamente con la contraseña hasheada
         # No usar UsuarioCreate porque ya tiene la contraseña hasheada
+        # Asegurar que id_carrera sea None para servicios, no cadena vacía
+        id_carrera_final = None if usuario_in.rol == 'servicios' else id_carrera_normalizado
         db_usuario = Usuario(
             id_usuario=usuario_data['id_usuario'],
             nombre_usuario=usuario_data['nombre_usuario'],
             contraseña=hashed_password,
-            id_carrera=usuario_data.get('id_carrera'),
+            id_carrera=id_carrera_final,
             rol=usuario_data['rol'],
             is_active=usuario_data.get('is_active', True)
         )
@@ -122,7 +155,22 @@ class UsuarioService:
             return db_usuario
         except IntegrityError as e:
             self.repository.db.rollback()
-            raise ValueError(f"El usuario con ID '{usuario_in.id_usuario}' ya existe")
+            # Intentar obtener más información del error
+            existing = self.repository.get_by_id_usuario(usuario_in.id_usuario)
+            if existing:
+                raise ValueError(
+                    f"El usuario con ID '{usuario_in.id_usuario}' ya existe. "
+                    f"Usuario existente: {existing.nombre_usuario} (Rol: {existing.rol}). "
+                    f"Por favor, usa un ID diferente."
+                )
+            else:
+                existing_nombre = self.repository.get_by_nombre_usuario(usuario_in.nombre_usuario)
+                if existing_nombre:
+                    raise ValueError(
+                        f"El nombre de usuario '{usuario_in.nombre_usuario}' ya está en uso. "
+                        f"Por favor, usa un nombre diferente."
+                    )
+            raise ValueError(f"Error de integridad al crear usuario: {str(e)}")
         except Exception as e:
             self.repository.db.rollback()
             raise ValueError(f"Error al crear usuario: {str(e)}")
@@ -135,9 +183,28 @@ class UsuarioService:
         
         update_data = usuario_update.dict(exclude_unset=True)
         
+        # Normalizar id_carrera: convertir cadenas vacías a None
+        if 'id_carrera' in update_data:
+            if update_data['id_carrera'] == '' or update_data['id_carrera'] is None:
+                update_data['id_carrera'] = None
+        
+        # Validar que usuarios con rol 'servicios' no tengan carrera asignada
+        nuevo_rol = update_data.get('rol', db_usuario.rol)
+        nuevo_id_carrera = update_data.get('id_carrera', db_usuario.id_carrera)
+        
+        if nuevo_rol == 'servicios' and nuevo_id_carrera:
+            raise ValueError("Los usuarios con rol 'servicios' no deben tener una carrera asignada.")
+        
+        if nuevo_rol == 'jefe' and not nuevo_id_carrera:
+            raise ValueError("Los usuarios con rol 'jefe' deben tener una carrera asignada.")
+        
         # Si se actualiza la contraseña, hashearla
         if 'contraseña' in update_data and update_data['contraseña']:
             update_data['contraseña'] = self.get_password_hash(update_data['contraseña'])
+        
+        # Asegurar que id_carrera sea None para servicios
+        if 'rol' in update_data and update_data['rol'] == 'servicios':
+            update_data['id_carrera'] = None
         
         # Actualizar los campos
         for field, value in update_data.items():
