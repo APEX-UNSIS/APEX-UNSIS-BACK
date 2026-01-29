@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional
-from datetime import date
+from datetime import date, time
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -178,11 +178,22 @@ def obtener_calendario_carrera(
         return []
     
     materias_carrera = set(h.id_materia for h in horarios_carrera)
-    grupos_unicos_horarios = set()
+    # Mapa (id_materia, id_grupo, id_periodo) -> horario (primer slot por dia_semana, hora_inicio) para aula y profesor titular del horario de clases
+    horario_por_materia_grupo_periodo = {}
     for h in horarios_carrera:
-        if h.id_grupo:
-            grupos_unicos_horarios.add(h.id_grupo)
-    print(f"[DEBUG] Horarios de la carrera {current_user.id_carrera}: {len(horarios_carrera)} horarios, {len(materias_carrera)} materias únicas, {len(grupos_unicos_horarios)} grupos únicos en horarios")
+        if not h.id_materia or not h.id_grupo or not h.id_periodo:
+            continue
+        key = (h.id_materia, h.id_grupo, h.id_periodo)
+        if key not in horario_por_materia_grupo_periodo:
+            horario_por_materia_grupo_periodo[key] = h
+        else:
+            actual = horario_por_materia_grupo_periodo[key]
+            d_a = actual.dia_semana if actual.dia_semana is not None else 99
+            d_h = h.dia_semana if h.dia_semana is not None else 99
+            if (d_h, h.hora_inicio or time(23, 59)) < (d_a, actual.hora_inicio or time(23, 59)):
+                horario_por_materia_grupo_periodo[key] = h
+    
+    print(f"[DEBUG] Horarios de la carrera {current_user.id_carrera}: {len(horarios_carrera)} horarios, mapa materia-grupo-periodo: {len(horario_por_materia_grupo_periodo)}")
     
     # Obtener solicitudes con relaciones cargadas
     from app.models.SolicitudExamen import SolicitudExamen
@@ -202,76 +213,96 @@ def obtener_calendario_carrera(
     
     print(f"[DEBUG] Solicitudes filtradas para carrera {current_user.id_carrera}: {len(solicitudes_carrera)}")
     
-    # Construir respuesta con información completa
+    # Obtener aula asignada al examen (fallback si no hay horario)
+    from app.models.AsignacionAula import AsignacionAula
+    from collections import defaultdict
+    
+    # Contar (fecha, hora, id_aula) para detectar conflictos (misma aula misma fecha/hora)
+    cuenta_aula_fecha_hora = defaultdict(int)
+    for s in solicitudes_carrera:
+        asig = db.query(AsignacionAula).filter(AsignacionAula.id_horario == s.id_horario).first()
+        if asig and asig.id_aula and s.fecha_examen and s.hora_inicio:
+            key = (s.fecha_examen, s.hora_inicio, asig.id_aula)
+            cuenta_aula_fecha_hora[key] += 1
+    
+    # Construir respuesta: una fila por (solicitud, grupo) con grupo, materia, maestro titular, fecha, hora, aula
     resultado = []
     for solicitud in solicitudes_carrera:
         try:
-            # Obtener grupos asociados con relación cargada
             from app.models.GrupoExamen import GrupoExamen
             grupos_examen = db.query(GrupoExamen).options(
                 joinedload(GrupoExamen.grupo)
             ).filter(GrupoExamen.id_horario == solicitud.id_horario).all()
             
-            grupos = []
-            for ge in grupos_examen:
-                if ge.grupo:
-                    grupos.append(ge.grupo.nombre_grupo)
-                else:
-                    grupos.append(ge.id_grupo)
-            
-            # Solo incluir solicitudes que tengan grupos asociados
-            # Si no hay grupos, la solicitud no está completa y no debe mostrarse
-            if not grupos:
-                print(f"[DEBUG] Solicitud {solicitud.id_horario} no tiene grupos asociados, se omite")
+            if not grupos_examen:
                 continue
             
-            print(f"[DEBUG] Solicitud {solicitud.id_horario} tiene {len(grupos)} grupos asociados: {grupos}")
-            
-            # Obtener aula asignada con relaciones cargadas
-            from app.models.AsignacionAula import AsignacionAula
             asignaciones_aula = db.query(AsignacionAula).options(
                 joinedload(AsignacionAula.aula),
                 joinedload(AsignacionAula.profesor_aplicador)
             ).filter(AsignacionAula.id_horario == solicitud.id_horario).all()
+            aula_fallback = None
+            if asignaciones_aula and asignaciones_aula[0].aula:
+                aula_fallback = asignaciones_aula[0].aula.nombre_aula
             
-            aula = None
-            profesor_aplicador = None
-            if asignaciones_aula and len(asignaciones_aula) > 0:
-                if asignaciones_aula[0].aula:
-                    aula = asignaciones_aula[0].aula.nombre_aula
-                if asignaciones_aula[0].profesor_aplicador:
-                    profesor_aplicador = asignaciones_aula[0].profesor_aplicador.nombre_profesor
-            
-            # Formatear fecha y hora
             fecha_str = solicitud.fecha_examen.strftime('%d/%m/%Y') if solicitud.fecha_examen else None
             hora_str = None
             if solicitud.hora_inicio and solicitud.hora_fin:
-                hora_inicio_str = solicitud.hora_inicio.strftime('%H:%M')
-                hora_fin_str = solicitud.hora_fin.strftime('%H:%M')
-                hora_str = f"{hora_inicio_str}-{hora_fin_str}"
+                hora_str = f"{solicitud.hora_inicio.strftime('%H:%M')}-{solicitud.hora_fin.strftime('%H:%M')}"
             
-            resultado.append({
-                'id_horario': solicitud.id_horario,
-                'materia': solicitud.materia.nombre_materia if solicitud.materia else None,
-                'grupos': grupos if grupos else [],
-                'profesor': profesor_aplicador,
-                'fecha': fecha_str,
-                'hora': hora_str,
-                'aula': aula,
-                'estado': solicitud.estado,
-                'periodo': solicitud.periodo.nombre_periodo if solicitud.periodo else None,
-                'id_periodo': solicitud.id_periodo,
-                'evaluacion': solicitud.evaluacion.nombre_evaluacion if solicitud.evaluacion else None,
-                'id_evaluacion': solicitud.id_evaluacion,
-                'motivo_rechazo': solicitud.motivo_rechazo
-            })
+            for ge in grupos_examen:
+                id_grupo = ge.id_grupo
+                nombre_grupo = ge.grupo.nombre_grupo if ge.grupo else id_grupo
+                key_h = (solicitud.id_materia, id_grupo, solicitud.id_periodo)
+                h_clase = horario_por_materia_grupo_periodo.get(key_h)
+                # Profesor del horario de clases; aula en blanco si no hay asignación (paso 1: ver todo sin aula)
+                if h_clase:
+                    profesor_display = h_clase.profesor.nombre_profesor if h_clase.profesor else None
+                else:
+                    profesor_display = None
+                if not profesor_display and asignaciones_aula and asignaciones_aula[0].profesor_aplicador:
+                    profesor_display = asignaciones_aula[0].profesor_aplicador.nombre_profesor
+                # Aula: asignada, del horario o en blanco (pendiente)
+                id_aula_sol = asignaciones_aula[0].id_aula if asignaciones_aula else None
+                if asignaciones_aula and asignaciones_aula[0].aula:
+                    aula_display = asignaciones_aula[0].aula.nombre_aula
+                elif h_clase and h_clase.aula:
+                    aula_display = h_clase.aula.nombre_aula
+                else:
+                    aula_display = ''
+                aula_conflicto = False
+                if id_aula_sol and solicitud.fecha_examen and solicitud.hora_inicio:
+                    key = (solicitud.fecha_examen, solicitud.hora_inicio, id_aula_sol)
+                    aula_conflicto = cuenta_aula_fecha_hora.get(key, 0) > 1
+                if not id_aula_sol:
+                    aula_conflicto = True  # Aula pendiente (ej. área salud): marcar en rojo
+                
+                resultado.append({
+                    'id_horario': solicitud.id_horario,
+                    'id_materia': solicitud.id_materia,
+                    'asignatura': solicitud.id_materia,
+                    'materia': solicitud.materia.nombre_materia if solicitud.materia else None,
+                    'grupo': nombre_grupo,
+                    'id_grupo': id_grupo,
+                    'grupos': [nombre_grupo],
+                    'profesor': profesor_display,
+                    'fecha': fecha_str,
+                    'hora': hora_str,
+                    'aula': aula_display,
+                    'aula_conflicto': aula_conflicto,
+                    'estado': solicitud.estado,
+                    'periodo': solicitud.periodo.nombre_periodo if solicitud.periodo else None,
+                    'id_periodo': solicitud.id_periodo,
+                    'evaluacion': solicitud.evaluacion.nombre_evaluacion if solicitud.evaluacion else None,
+                    'id_evaluacion': solicitud.id_evaluacion,
+                    'motivo_rechazo': solicitud.motivo_rechazo
+                })
         except Exception as e:
-            # Si hay un error con una solicitud, continuar con las demás
             print(f"Error procesando solicitud {solicitud.id_horario}: {str(e)}")
             continue
     
-    # Ordenar por fecha
-    resultado.sort(key=lambda x: x['fecha'] if x['fecha'] else '')
+    # Ordenar por asignatura (id_materia) ascendente, luego por grupo (como en API materias)
+    resultado.sort(key=lambda x: (x.get('id_materia') or '', x.get('grupo') or ''))
     
     return resultado
 
@@ -361,12 +392,7 @@ def obtener_calendarios_servicios_escolares(
 ):
     """
     Obtiene todos los calendarios agrupados por carrera para Servicios Escolares.
-    
-    Args:
-        estado: Filtrar por estado (opcional)
-    
-    Returns:
-        Lista de calendarios agrupados por carrera con información completa
+    Optimizado: una sola query con joinedload y batch de carreras/jefes (sin N+1).
     """
     if current_user.rol != 'servicios':
         raise HTTPException(
@@ -374,31 +400,23 @@ def obtener_calendarios_servicios_escolares(
             detail="Solo Servicios Escolares puede acceder a esta información"
         )
     
-    from app.repositories.SolicitudRepository import SolicitudRepository
-    from app.repositories.CarreraRepository import CarreraRepository
-    from app.repositories.UsuarioRepository import UsuarioRepository
-    from app.repositories.GrupoExamenRepository import GrupoExamenRepository
-    from app.repositories.AsignacionAulaRepository import AsignacionAulaRepository
-    from app.repositories.HorarioRepository import HorarioRepository
+    from app.models.SolicitudExamen import SolicitudExamen
+    from app.models.GrupoExamen import GrupoExamen
+    from app.models.AsignacionAula import AsignacionAula
+    from app.models.Carrera import Carrera
+    from app.models.Usuario import Usuario
     from app.schemas.EstadoSolicitudSchema import EstadoSolicitud
     from sqlalchemy.orm import joinedload
-    
-    solicitud_repo = SolicitudRepository(db)
-    carrera_repo = CarreraRepository(db)
-    usuario_repo = UsuarioRepository(db)
-    grupo_examen_repo = GrupoExamenRepository(db)
-    asignacion_aula_repo = AsignacionAulaRepository(db)
-    horario_repo = HorarioRepository(db)
-    
-    # Obtener todas las solicitudes
-    from app.models.SolicitudExamen import SolicitudExamen
+
+    # Una sola query con todas las relaciones necesarias (evita N+1)
     query = db.query(SolicitudExamen).options(
         joinedload(SolicitudExamen.materia),
         joinedload(SolicitudExamen.periodo),
-        joinedload(SolicitudExamen.evaluacion)
+        joinedload(SolicitudExamen.evaluacion),
+        joinedload(SolicitudExamen.grupos_examen).joinedload(GrupoExamen.grupo),
+        joinedload(SolicitudExamen.aulas_asignadas).joinedload(AsignacionAula.aula),
+        joinedload(SolicitudExamen.aulas_asignadas).joinedload(AsignacionAula.profesor_aplicador),
     )
-    
-    # Filtrar por estado si se especifica
     if estado:
         estado_map = {
             'pendiente': EstadoSolicitud.PENDIENTE,
@@ -407,83 +425,64 @@ def obtener_calendarios_servicios_escolares(
         }
         if estado in estado_map:
             query = query.filter(SolicitudExamen.estado == estado_map[estado])
-    
+
     todas_solicitudes = query.all()
-    
-    # Agrupar por carrera, periodo y evaluación
+
+    # Recoger id_carrera únicos para cargar carreras y jefes en batch
+    id_carreras = set()
+    for s in todas_solicitudes:
+        if s.grupos_examen:
+            ge = s.grupos_examen[0]
+            if ge and ge.grupo:
+                id_carreras.add(ge.grupo.id_carrera)
+
+    carrera_map = {}
+    jefe_map = {}
+    if id_carreras:
+        carreras = db.query(Carrera).filter(Carrera.id_carrera.in_(id_carreras)).all()
+        carrera_map = {c.id_carrera: c.nombre_carrera for c in carreras}
+        jefes = db.query(Usuario).filter(
+            Usuario.id_carrera.in_(id_carreras),
+            Usuario.rol == 'jefe'
+        ).all()
+        jefe_map = {j.id_carrera: j.nombre_usuario for j in jefes}
+
     calendarios_por_carrera = {}
-    
     for solicitud in todas_solicitudes:
-        # Obtener la carrera a través de los grupos
-        from app.models.GrupoExamen import GrupoExamen
-        grupos_examen = db.query(GrupoExamen).options(
-            joinedload(GrupoExamen.grupo)
-        ).filter(GrupoExamen.id_horario == solicitud.id_horario).first()
-        
-        if not grupos_examen or not grupos_examen.grupo:
+        if not solicitud.grupos_examen or not solicitud.grupos_examen[0].grupo:
             continue
-        
-        id_carrera = grupos_examen.grupo.id_carrera
+        id_carrera = solicitud.grupos_examen[0].grupo.id_carrera
         clave = f"{id_carrera}-{solicitud.id_periodo}-{solicitud.id_evaluacion}"
-        
+
         if clave not in calendarios_por_carrera:
-            carrera = carrera_repo.get_by_id(id_carrera)
-            # Buscar jefe de carrera
-            from app.models.Usuario import Usuario
-            jefe = db.query(Usuario).filter(
-                Usuario.id_carrera == id_carrera,
-                Usuario.rol == 'jefe'
-            ).first()
-            jefe_nombre = jefe.nombre_usuario if jefe else None
-            
             calendarios_por_carrera[clave] = {
                 'id_carrera': id_carrera,
-                'nombre_carrera': carrera.nombre_carrera if carrera else id_carrera,
+                'nombre_carrera': carrera_map.get(id_carrera, id_carrera),
                 'id_periodo': solicitud.id_periodo,
                 'nombre_periodo': solicitud.periodo.nombre_periodo if solicitud.periodo else None,
                 'id_evaluacion': solicitud.id_evaluacion,
                 'nombre_evaluacion': solicitud.evaluacion.nombre_evaluacion if solicitud.evaluacion else None,
-                'jefe_carrera': jefe_nombre,
-                'fecha_envio': None,  # TODO: Agregar campo fecha_envio si es necesario
-                'estado': 'pendiente' if solicitud.estado == EstadoSolicitud.PENDIENTE else 
+                'jefe_carrera': jefe_map.get(id_carrera),
+                'fecha_envio': None,
+                'estado': 'pendiente' if solicitud.estado == EstadoSolicitud.PENDIENTE else
                          'aprobado' if solicitud.estado == EstadoSolicitud.APROBADO else 'rechazado',
                 'observaciones': solicitud.motivo_rechazo,
                 'examenes': []
             }
-        
-        # Obtener grupos asociados
-        grupos_examen_list = db.query(GrupoExamen).options(
-            joinedload(GrupoExamen.grupo)
-        ).filter(GrupoExamen.id_horario == solicitud.id_horario).all()
-        
-        grupos = []
-        for ge in grupos_examen_list:
-            if ge.grupo:
-                grupos.append(ge.grupo.nombre_grupo)
-        
-        # Obtener aula y profesor
-        from app.models.AsignacionAula import AsignacionAula
-        asignaciones_aula = db.query(AsignacionAula).options(
-            joinedload(AsignacionAula.aula),
-            joinedload(AsignacionAula.profesor_aplicador)
-        ).filter(AsignacionAula.id_horario == solicitud.id_horario).all()
-        
+
+        grupos = [ge.grupo.nombre_grupo for ge in solicitud.grupos_examen if ge.grupo]
         aula = None
         profesor = None
-        if asignaciones_aula and len(asignaciones_aula) > 0:
-            if asignaciones_aula[0].aula:
-                aula = asignaciones_aula[0].aula.nombre_aula
-            if asignaciones_aula[0].profesor_aplicador:
-                profesor = asignaciones_aula[0].profesor_aplicador.nombre_profesor
-        
-        # Formatear fecha y hora
+        if solicitud.aulas_asignadas:
+            a0 = solicitud.aulas_asignadas[0]
+            aula = a0.aula.nombre_aula if a0.aula else None
+            profesor = a0.profesor_aplicador.nombre_profesor if a0.profesor_aplicador else None
+
         fecha_str = solicitud.fecha_examen.strftime('%d/%m/%Y') if solicitud.fecha_examen else None
         hora_str = None
         if solicitud.hora_inicio and solicitud.hora_fin:
-            hora_inicio_str = solicitud.hora_inicio.strftime('%H:%M')
-            hora_fin_str = solicitud.hora_fin.strftime('%H:%M')
-            hora_str = f"{hora_inicio_str}-{hora_fin_str}"
-        
+            hora_str = f"{solicitud.hora_inicio.strftime('%H:%M')}-{solicitud.hora_fin.strftime('%H:%M')}"
+
         calendarios_por_carrera[clave]['examenes'].append({
             'id_horario': solicitud.id_horario,
             'materia': solicitud.materia.nombre_materia if solicitud.materia else None,
@@ -492,15 +491,13 @@ def obtener_calendarios_servicios_escolares(
             'fecha': fecha_str,
             'hora': hora_str,
             'aula': aula,
-            'estado': 'pendiente' if solicitud.estado == EstadoSolicitud.PENDIENTE else 
+            'estado': 'pendiente' if solicitud.estado == EstadoSolicitud.PENDIENTE else
                      'aprobado' if solicitud.estado == EstadoSolicitud.APROBADO else 'rechazado'
         })
-    
-    # Convertir a lista y agregar total_examenes
+
     resultado = []
     for calendario in calendarios_por_carrera.values():
         calendario['total_examenes'] = len(calendario['examenes'])
-        # Determinar estado general (si todos están aprobados, está aprobado, etc.)
         estados = [e['estado'] for e in calendario['examenes']]
         if all(e == 'aprobado' for e in estados):
             calendario['estado'] = 'aprobado'
@@ -509,11 +506,10 @@ def obtener_calendarios_servicios_escolares(
         elif any(e == 'pendiente' for e in estados):
             calendario['estado'] = 'pendiente'
         resultado.append(calendario)
-    
-    # Filtrar por estado si se especifica
+
     if estado:
         resultado = [c for c in resultado if c['estado'] == estado]
-    
+
     return resultado
 
 

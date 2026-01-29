@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -125,3 +125,28 @@ def read_users_me(current_user: UsuarioResponse = Depends(get_current_user)):
     Obtiene la información del usuario actual autenticado
     """
     return current_user
+
+
+@router.post("/reset-admin-password")
+def reset_admin_password(
+    reset_key: str = Query(..., description="Clave de reseteo (debe coincidir con RESET_ADMIN_KEY en .env)"),
+    new_password: str = Query("admin123", description="Nueva contraseña para el usuario admin"),
+    service: UsuarioService = Depends(get_usuario_service),
+):
+    """
+    Resetea la contraseña del usuario 'admin' usando la misma BD que la app.
+    Solo funciona si RESET_ADMIN_KEY está definido en .env y coincide con reset_key.
+    Uso: POST /api/v1/auth/reset-admin-password?reset_key=TU_CLAVE&new_password=admin123
+    Después de usarlo, quita o cambia RESET_ADMIN_KEY en producción.
+    """
+    # Si RESET_ADMIN_KEY está en .env, debe coincidir. Si no está, se acepta "reset-admin-now" una vez.
+    if settings.reset_admin_key:
+        if settings.reset_admin_key != reset_key:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado")
+    elif reset_key != "reset-admin-now":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado. Usa reset_key=reset-admin-now o define RESET_ADMIN_KEY en .env")
+    try:
+        service.reset_password_by_id("admin", new_password)
+        return {"message": "Contraseña del usuario admin actualizada. Ya puedes iniciar sesión."}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

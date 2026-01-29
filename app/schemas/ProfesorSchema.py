@@ -20,4 +20,4 @@ class ProfesorUpdate(BaseModel):
 
 class Profesor(ProfesorBase):
     class Config:
-        orm_mode = True
+        from_attributes = True

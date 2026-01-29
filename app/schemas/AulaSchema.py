@@ -22,4 +22,4 @@ class AulaUpdate(BaseModel):
 
 class Aula(AulaBase):
     class Config:
-        orm_mode = True
+        from_attributes = True

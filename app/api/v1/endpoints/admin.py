@@ -16,6 +16,7 @@ from app.models.Profesor import Profesor
 from app.models.Materia import Materia
 from app.models.PeriodoAcademico import PeriodoAcademico
 from app.models.HorarioClase import HorarioClase
+from app.models.SalaComputo import SalaComputo
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -313,25 +314,34 @@ async def sincronizar_base_datos(
             # Obtener datos base primero
             log_progress("📡 Consultando APIs externas...", logs)
             
-            # Obtener aulas
+            # Consultar aulas de la API para obtener nombres y capacidad (solo se procesarán las que aparecen en horarios)
+            data_aulas_dict = {}  # id_aula -> nombre_aula
+            data_aulas_capacidad = {}  # id_aula -> capacidad (int o None)
             try:
-                log_progress("  📚 Consultando aulas...", logs)
+                log_progress("  📚 Consultando aulas de la API (nombres y capacidad)...", logs)
                 response_aulas = await client.get(url_aulas)
                 response_aulas.raise_for_status()
                 data_aulas_raw = response_aulas.json()
-                count_aulas_raw = len(data_aulas_raw) if isinstance(data_aulas_raw, list) else 0
                 
-                # Filtrar duplicados por ID
                 if isinstance(data_aulas_raw, list):
-                    data_aulas = filtrar_duplicados_por_id(data_aulas_raw, 'id_aula')
-                    count_aulas_filtradas = len(data_aulas)
-                    log_progress(f"  ✅ Aulas obtenidas: {count_aulas_raw} → {count_aulas_filtradas} (filtradas: {count_aulas_raw - count_aulas_filtradas} duplicados)", logs)
+                    for aula_data in data_aulas_raw:
+                        id_aula = aula_data.get('id_aula') or aula_data.get('clave')
+                        nombre_aula = aula_data.get('nombre_aula') or aula_data.get('nombre')
+                        if id_aula and nombre_aula:
+                            if isinstance(id_aula, (int, float)):
+                                id_aula = str(int(id_aula))
+                            data_aulas_dict[id_aula] = nombre_aula
+                            cap = aula_data.get('capacidad') or aula_data.get('capacity')
+                            if cap is not None:
+                                try:
+                                    data_aulas_capacidad[id_aula] = int(cap)
+                                except (TypeError, ValueError):
+                                    pass
+                    log_progress(f"  ✅ Aulas: {len(data_aulas_dict)} nombres, {len(data_aulas_capacidad)} con capacidad", logs)
                 else:
-                    data_aulas = []
-                    log_progress(f"  ✅ Aulas obtenidas: 0 (formato no válido)", logs)
+                    log_progress(f"  ⚠️ Formato de aulas no válido, se usarán nombres de horarios", logs)
             except Exception as e:
-                log_progress(f"  ⚠️ No se pudo obtener aulas: {str(e)[:100]}", logs)
-                data_aulas = []
+                log_progress(f"  ⚠️ No se pudo obtener mapeo de aulas: {str(e)[:100]} (se usarán nombres de horarios)", logs)
             
             # Obtener carreras
             try:
@@ -652,7 +662,7 @@ async def sincronizar_base_datos(
             
             data = {
                 'horarios': normalize_data(data_horarios, 'horarios'),
-                'aulas': normalize_data(data_aulas, 'aulas'),
+                'aulas': [],  # Las aulas se procesan directamente de los horarios, no de la API
                 'carreras': normalize_data(data_carreras, 'carreras'),
                 'profesores': normalize_data(data_profesores, 'profesores'),
                 'materias': normalize_data(data_materias, 'materias'),
@@ -898,43 +908,9 @@ async def sincronizar_base_datos(
                         estadisticas['errores'].append(f"Error procesando grupo: {str(e)}")
             log_progress(f"    ✅ Grupos: {estadisticas['grupos_insertados']} insertados, {estadisticas['grupos_actualizados']} actualizados", logs)
             
-            # Procesar aulas
-            log_progress("  📚 Procesando aulas...", logs)
-            if 'aulas' in data:
-                for aula_data in data['aulas']:
-                    try:
-                        # Mapear campos: la API usa 'clave' como ID y 'nombre' como nombre
-                        id_aula = aula_data.get('id_aula') or aula_data.get('clave')
-                        nombre_aula = aula_data.get('nombre_aula') or aula_data.get('nombre')
-                        capacidad = aula_data.get('capacidad', 0)
-                        
-                        if not id_aula or not nombre_aula:
-                            continue
-                        
-                        # Convertir id_aula a string si es numérico
-                        if isinstance(id_aula, (int, float)):
-                            id_aula = str(int(id_aula))
-                        
-                        aula_existente = db.query(Aula).filter(
-                            Aula.id_aula == id_aula
-                        ).first()
-                        
-                        if not aula_existente:
-                            nueva_aula = Aula(
-                                id_aula=id_aula,
-                                nombre_aula=nombre_aula,
-                                capacidad=capacidad,
-                                is_disable=False
-                            )
-                            db.add(nueva_aula)
-                            estadisticas['aulas_insertadas'] += 1
-                        else:
-                            # Actualizar si existe
-                            aula_existente.nombre_aula = nombre_aula
-                            aula_existente.capacidad = capacidad
-                            estadisticas['aulas_actualizadas'] += 1
-                    except Exception as e:
-                        estadisticas['errores'].append(f"Error procesando aula: {str(e)}")
+            # NO procesar aulas de la API - solo se procesarán las que aparecen en los horarios
+            # Las aulas se extraerán y procesarán durante el procesamiento de horarios
+            log_progress("  📚 Aulas: Se procesarán solo las que aparecen en los horarios", logs)
             
             # Procesar profesores
             log_progress("  👨‍🏫 Procesando profesores...", logs)
@@ -1022,6 +998,8 @@ async def sincronizar_base_datos(
             
             if 'horarios' in data:
                 id_periodo_actual = data.get('periodo', {}).get('id_periodo') or data.get('periodo', {}).get('periodog') or periodo
+                aulas_agregadas_en_sesion = set()  # Evitar insertar la misma aula varias veces en esta sincronización
+                salas_computo_agregadas_en_sesion = set()  # Evitar insertar el mismo id_aula en salas_de_computo varias veces
                 
                 for horario_data in data['horarios']:
                     try:
@@ -1042,6 +1020,42 @@ async def sincronizar_base_datos(
                         if nombre_profesor and es_profesor_no_deseado(str(nombre_profesor)):
                             horarios_excluidos_profesor += 1
                             continue  # Saltar este horario completo
+                        
+                        # Horarios con materia "SALA DE CÓMPUTO" (o similar): NO se guardan como materia ni como horario.
+                        # Solo se usa el aula para registrar en salas_de_computo (exámenes en plataforma).
+                        nombre_materia_horario_raw = (horario_data.get('materia') or '').strip().upper()
+                        es_materia_sala_computo = nombre_materia_horario_raw and (
+                            'SALA DE CÓMPUTO' in nombre_materia_horario_raw or 'SALA DE COMPUTO' in nombre_materia_horario_raw
+                        )
+                        if es_materia_sala_computo:
+                            id_aula_horario = horario_data.get('id_aula') or horario_data.get('idAula')
+                            if id_aula_horario:
+                                if isinstance(id_aula_horario, (int, float)):
+                                    id_aula_horario = str(int(id_aula_horario))
+                                nombre_aula_final = data_aulas_dict.get(id_aula_horario) or horario_data.get('nombreAula') or horario_data.get('nombre_aula') or id_aula_horario
+                                capacidad_aula = data_aulas_capacidad.get(id_aula_horario)
+                                aula_existente = db.query(Aula).filter(Aula.id_aula == id_aula_horario).first()
+                                ya_agregada = id_aula_horario in aulas_agregadas_en_sesion
+                                if not aula_existente and not ya_agregada:
+                                    db.add(Aula(id_aula=id_aula_horario, nombre_aula=nombre_aula_final, capacidad=capacidad_aula if capacidad_aula is not None else 0, is_disable=False))
+                                    aulas_agregadas_en_sesion.add(id_aula_horario)
+                                    estadisticas['aulas_insertadas'] += 1
+                                elif aula_existente:
+                                    actualizado = False
+                                    if nombre_aula_final and aula_existente.nombre_aula != nombre_aula_final:
+                                        aula_existente.nombre_aula = nombre_aula_final
+                                        actualizado = True
+                                    if capacidad_aula is not None and aula_existente.capacidad != capacidad_aula:
+                                        aula_existente.capacidad = capacidad_aula
+                                        actualizado = True
+                                    if actualizado:
+                                        estadisticas['aulas_actualizadas'] += 1
+                                existe_sala = db.query(SalaComputo).filter(SalaComputo.id_aula == id_aula_horario).first()
+                                ya_sala_en_sesion = id_aula_horario in salas_computo_agregadas_en_sesion
+                                if not existe_sala and not ya_sala_en_sesion:
+                                    db.add(SalaComputo(id_aula=id_aula_horario))
+                                    salas_computo_agregadas_en_sesion.add(id_aula_horario)
+                            continue  # No crear materia ni horario para SALA DE CÓMPUTO
                         
                         # Extraer carrera del horario si no está en datos separados
                         carrera_horario = horario_data.get('carrera')
@@ -1091,19 +1105,43 @@ async def sincronizar_base_datos(
                                 db.add(nuevo_profesor)
                                 estadisticas['profesores_insertados'] += 1
                         
-                        # Extraer aula del horario si no está en datos separados
-                        nombre_aula = horario_data.get('nombreAula')
-                        if nombre_aula and id_aula_horario and 'aulas' not in data:
+                        # Extraer aula del horario - SIEMPRE procesar aulas de los horarios
+                        # Priorizar el nombre de la API de aulas sobre el nombre del horario
+                        if id_aula_horario:
+                            # Convertir id_aula a string si es numérico
+                            if isinstance(id_aula_horario, (int, float)):
+                                id_aula_horario = str(int(id_aula_horario))
+                            
+                            # Obtener nombre y capacidad: primero de la API de aulas, luego del horario
+                            nombre_aula_final = data_aulas_dict.get(id_aula_horario)
+                            if not nombre_aula_final:
+                                nombre_aula_final = horario_data.get('nombreAula') or horario_data.get('nombre_aula')
+                            if not nombre_aula_final:
+                                nombre_aula_final = str(id_aula_horario)  # Fallback al ID
+                            capacidad_aula = data_aulas_capacidad.get(str(id_aula_horario))
+                            
                             aula_existente = db.query(Aula).filter(Aula.id_aula == str(id_aula_horario)).first()
-                            if not aula_existente:
+                            ya_agregada_en_sesion = str(id_aula_horario) in aulas_agregadas_en_sesion
+                            if not aula_existente and not ya_agregada_en_sesion:
                                 nueva_aula = Aula(
                                     id_aula=str(id_aula_horario),
-                                    nombre_aula=nombre_aula,
-                                    capacidad=0,  # No disponible en horarios
+                                    nombre_aula=nombre_aula_final,
+                                    capacidad=capacidad_aula if capacidad_aula is not None else 0,
                                     is_disable=False
                                 )
                                 db.add(nueva_aula)
+                                aulas_agregadas_en_sesion.add(str(id_aula_horario))
                                 estadisticas['aulas_insertadas'] += 1
+                            elif aula_existente:
+                                actualizado = False
+                                if nombre_aula_final and aula_existente.nombre_aula != nombre_aula_final:
+                                    aula_existente.nombre_aula = nombre_aula_final
+                                    actualizado = True
+                                if capacidad_aula is not None and aula_existente.capacidad != capacidad_aula:
+                                    aula_existente.capacidad = capacidad_aula
+                                    actualizado = True
+                                if actualizado:
+                                    estadisticas['aulas_actualizadas'] += 1
                         
                         # Extraer grupo del horario si no está en datos separados
                         nombre_grupo = horario_data.get('nombreGrupo')
@@ -1220,8 +1258,66 @@ async def sincronizar_base_datos(
             if horarios_excluidos_grupo > 0 or horarios_excluidos_profesor > 0:
                 log_progress(f"    🚫 Horarios excluidos: {horarios_excluidos_grupo} por grupo (P/V), {horarios_excluidos_profesor} por profesor (técnico/genérico)", logs)
             log_progress(f"    ✅ Horarios: {estadisticas['horarios_insertados']} insertados, {estadisticas['horarios_actualizados']} actualizados", logs)
+            log_progress(f"    ✅ Aulas extraídas de horarios: {estadisticas['aulas_insertadas']} insertadas, {estadisticas['aulas_actualizadas']} actualizadas", logs)
             
-            # Commit de todos los cambios
+            # Salas de cómputo se registran solo desde horarios cuya materia es "SALA DE CÓMPUTO" (ver bloque de aula arriba)
+            
+            # Limpiar materias no deseadas (SALA DE CÓMPUTO, INGLÉS, etc.)
+            # IMPORTANTE: Esto debe ejecutarse DESPUÉS de procesar todos los horarios
+            # porque los horarios pueden crear nuevas materias
+            log_progress("  🧹 Limpiando materias no deseadas...", logs)
+            materias_eliminadas = 0
+            try:
+                from sqlalchemy import or_
+                from app.models.SolicitudExamen import SolicitudExamen
+                from app.models.PermisoSinodal import PermisoSinodal
+                
+                # Obtener IDs de materias a eliminar
+                materias_a_eliminar = db.query(Materia).filter(
+                    or_(
+                        Materia.nombre_materia.ilike('%SALA DE CÓMPUTO%'),
+                        Materia.nombre_materia.ilike('%INGLÉS%'),
+                        Materia.nombre_materia.ilike('%SALA DE COMPUTO%')
+                    )
+                ).all()
+                
+                if materias_a_eliminar:
+                    ids_materias_eliminar = [m.id_materia for m in materias_a_eliminar]
+                    nombres_materias_eliminar = [m.nombre_materia for m in materias_a_eliminar]
+                    
+                    log_progress(f"    🗑️ Encontradas {len(materias_a_eliminar)} materias a eliminar: {', '.join(nombres_materias_eliminar[:5])}{'...' if len(nombres_materias_eliminar) > 5 else ''}", logs)
+                    
+                    # Eliminar de tablas dependientes primero (en orden de dependencias)
+                    # 1. Eliminar horarios que referencian estas materias
+                    horarios_eliminados = db.query(HorarioClase).filter(
+                        HorarioClase.id_materia.in_(ids_materias_eliminar)
+                    ).delete(synchronize_session=False)
+                    
+                    # 2. Eliminar solicitudes de examen que referencian estas materias
+                    solicitudes_eliminadas = db.query(SolicitudExamen).filter(
+                        SolicitudExamen.id_materia.in_(ids_materias_eliminar)
+                    ).delete(synchronize_session=False)
+                    
+                    # 3. Eliminar permisos sinodal que referencian estas materias
+                    permisos_eliminados = db.query(PermisoSinodal).filter(
+                        PermisoSinodal.id_materia.in_(ids_materias_eliminar)
+                    ).delete(synchronize_session=False)
+                    
+                    # 4. Finalmente eliminar las materias
+                    materias_eliminadas = db.query(Materia).filter(
+                        Materia.id_materia.in_(ids_materias_eliminar)
+                    ).delete(synchronize_session=False)
+                    
+                    log_progress(f"    ✅ Eliminadas: {materias_eliminadas} materias, {horarios_eliminados} horarios, {solicitudes_eliminadas} solicitudes de examen, {permisos_eliminados} permisos sinodal", logs)
+                else:
+                    log_progress("    ✅ No se encontraron materias no deseadas para eliminar", logs)
+            except Exception as e:
+                log_progress(f"    ⚠️ Error al limpiar materias: {str(e)[:100]}", logs)
+                estadisticas['errores'].append(f"Error al limpiar materias no deseadas: {str(e)}")
+                import traceback
+                traceback.print_exc()
+            
+            # Commit de todos los cambios (incluyendo la limpieza de materias)
             log_progress("💾 Guardando cambios en la base de datos...", logs)
             db.commit()
             log_progress("✅ Cambios guardados exitosamente", logs)

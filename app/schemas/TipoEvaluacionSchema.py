@@ -18,4 +18,4 @@ class TipoEvaluacionUpdate(BaseModel):
 
 class TipoEvaluacion(TipoEvaluacionBase):
     class Config:
-        orm_mode = True
+        from_attributes = True

@@ -17,10 +17,16 @@ class UsuarioService:
         """Verifica si la contraseña en texto plano coincide con el hash"""
         try:
             if not hashed_password or not plain_password:
+                print(f"[DEBUG] verify_password: hash o password vacío")
                 return False
             
             # Limpiar el hash (eliminar espacios y caracteres extra)
             hashed_password = hashed_password.strip()
+            
+            # Verificar que el hash tenga el formato correcto de bcrypt
+            if not hashed_password.startswith('$2b$') and not hashed_password.startswith('$2a$') and not hashed_password.startswith('$2y$'):
+                print(f"[DEBUG] verify_password: Hash no tiene formato bcrypt válido. Empieza con: {hashed_password[:10]}")
+                return False
             
             # Convertir a bytes si es necesario
             if isinstance(hashed_password, str):
@@ -34,10 +40,17 @@ class UsuarioService:
                 plain_password_bytes = plain_password
             
             # Verificar con bcrypt directamente
-            return bcrypt.checkpw(plain_password_bytes, hashed_password_bytes)
+            result = bcrypt.checkpw(plain_password_bytes, hashed_password_bytes)
+            print(f"[DEBUG] verify_password: Resultado de bcrypt.checkpw: {result}")
+            if not result:
+                # Intentar verificar si el hash tiene algún problema de codificación
+                print(f"[DEBUG] verify_password: Hash completo: {hashed_password}")
+                print(f"[DEBUG] verify_password: Password recibida: '{plain_password}' (bytes: {plain_password_bytes})")
+            return result
         except Exception as e:
-            print(f"Error verificando contraseña: {str(e)}")
-            print(f"Hash recibido (longitud: {len(hashed_password) if hashed_password else 0}): {hashed_password[:50] if hashed_password else 'None'}...")
+            print(f"[DEBUG] Error verificando contraseña: {str(e)}")
+            print(f"[DEBUG] Hash recibido (longitud: {len(hashed_password) if hashed_password else 0}): {hashed_password[:50] if hashed_password else 'None'}...")
+            print(f"[DEBUG] Tipo de hash: {type(hashed_password)}")
             import traceback
             traceback.print_exc()
             return False
@@ -67,17 +80,23 @@ class UsuarioService:
                 return None
             
             # Debug: verificar hash
-            print(f"Verificando contraseña para usuario: {usuario.id_usuario}")
+            print(f"[AUTH] Verificando contraseña para usuario: {usuario.id_usuario}")
             stored_hash = usuario.contraseña.strip() if usuario.contraseña else None
-            print(f"Hash almacenado (longitud: {len(stored_hash) if stored_hash else 0}): {stored_hash[:30] if stored_hash else 'None'}...")
-            print(f"Password recibida: {password}")
+            print(f"[AUTH] Hash almacenado (longitud: {len(stored_hash) if stored_hash else 0}): {stored_hash[:30] if stored_hash else 'None'}...")
+            print(f"[AUTH] Hash completo: {stored_hash}")
+            print(f"[AUTH] Password recibida: '{password}'")
+            print(f"[AUTH] Formato hash válido: {stored_hash.startswith('$2') if stored_hash else False}")
             
             if not stored_hash:
-                print(f"No hay hash almacenado para usuario: {usuario.id_usuario}")
+                print(f"[AUTH] No hay hash almacenado para usuario: {usuario.id_usuario}")
                 return None
             
             if not self.verify_password(password, stored_hash):
-                print(f"Contraseña incorrecta para usuario: {usuario.id_usuario}")
+                print(f"[AUTH] Contraseña incorrecta para usuario: {usuario.id_usuario}")
+                # Intentar generar un nuevo hash para comparar (solo para debug)
+                test_hash = self.get_password_hash(password)
+                print(f"[AUTH] Hash generado para '{password}': {test_hash}")
+                print(f"[AUTH] Los hashes son diferentes (esto es normal, cada hash es único)")
                 return None
             
             print(f"Autenticación exitosa para usuario: {usuario.id_usuario}")
@@ -250,3 +269,12 @@ class UsuarioService:
 
     def get_by_rol(self, rol: str, skip: int = 0, limit: int = 100):
         return self.repository.get_by_rol(rol, skip, limit)
+
+    def reset_password_by_id(self, id_usuario: str, new_password: str) -> None:
+        """Resetea la contraseña de un usuario por id (hash y guarda en la misma BD)."""
+        usuario = self.repository.get_by_id_usuario(id_usuario)
+        if not usuario:
+            raise ValueError(f"Usuario '{id_usuario}' no encontrado")
+        usuario.contraseña = self.get_password_hash(new_password)
+        self.repository.db.commit()
+        self.repository.db.refresh(usuario)

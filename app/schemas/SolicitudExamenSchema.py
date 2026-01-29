@@ -38,4 +38,4 @@ class SolicitudExamen(SolicitudExamenBase):
     materia: Optional[Materia] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True

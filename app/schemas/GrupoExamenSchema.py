@@ -25,4 +25,4 @@ class GrupoExamen(GrupoExamenBase):
     grupo: Optional[GrupoEscolar] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True

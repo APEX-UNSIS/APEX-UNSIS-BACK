@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 from app.models.Materia import Materia
 from app.repositories.MateriaRepository import MateriaRepository
@@ -14,5 +14,5 @@ class MateriaService(BaseService[Materia, MateriaCreate, MateriaUpdate]):
     def get_by_nombre(self, nombre: str) -> Optional[Materia]:
         return self.repository.get_by_nombre(nombre)
 
-    def get_by_carrera(self, id_carrera: str, skip: int = 0, limit: int = 100):
-        return self.repository.get_by_carrera(id_carrera, skip, limit)
+    def get_by_carrera(self, id_carrera: str, skip: int = 0, limit: int = 100, id_periodo: Optional[str] = None, id_grupo: Optional[str] = None) -> List[Materia]:
+        return self.repository.get_by_carrera(id_carrera, skip, limit, id_periodo, id_grupo)

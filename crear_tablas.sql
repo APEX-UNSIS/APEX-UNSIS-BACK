@@ -1,8 +1,11 @@
 -- =====================================================
 -- Script para crear las tablas de la base de datos APEX-UNSIS
 -- =====================================================
--- Este script SOLO crea las tablas, NO inserta datos
--- Ejecutar en pgAdmin o psql después de crear la base de datos
+-- Última versión: incluye materias.es_academia, materias.tipo_examen, tabla salas_de_computo
+-- (tipos de examen: 'escrito' | 'plataforma'; por defecto: plataforma)
+-- salas_de_computo: lista de id_aula que son salas de cómputo (exámenes en plataforma); no son materias.
+-- Este script crea las tablas, usuario admin y asegura columnas de materias.
+-- Ejecutar en pgAdmin o psql después de crear la base de datos.
 -- =====================================================
 
 -- =====================================================
@@ -39,10 +42,12 @@ CREATE TABLE IF NOT EXISTS periodos_academicos (
     nombre_periodo VARCHAR(30)
 );
 
--- Tabla: materias
+-- Tabla: materias (incluye es_academia y tipo_examen: 'escrito' | 'plataforma')
 CREATE TABLE IF NOT EXISTS materias (
     id_materia VARCHAR(20) PRIMARY KEY,
-    nombre_materia VARCHAR(50)
+    nombre_materia VARCHAR(50),
+    es_academia BOOLEAN DEFAULT FALSE,
+    tipo_examen VARCHAR(20) DEFAULT 'plataforma'
 );
 
 -- Tabla: tipos_de_evaluacion
@@ -57,6 +62,12 @@ CREATE TABLE IF NOT EXISTS aulas (
     nombre_aula VARCHAR(50),
     capacidad INTEGER,
     is_disable BOOLEAN DEFAULT FALSE
+);
+
+-- Tabla: salas_de_computo (aulas que son sala de cómputo para exámenes en plataforma; no son materias)
+CREATE TABLE IF NOT EXISTS salas_de_computo (
+    id_aula VARCHAR(20) PRIMARY KEY,
+    CONSTRAINT fk_sala_computo_aula FOREIGN KEY (id_aula) REFERENCES aulas(id_aula)
 );
 
 -- Tabla: grupos_escolares
@@ -153,12 +164,39 @@ CREATE TABLE IF NOT EXISTS asignacion_sinodales (
 );
 
 -- =====================================================
+-- DATOS INICIALES: TIPOS DE EVALUACIÓN
+-- =====================================================
+INSERT INTO tipos_de_evaluacion (id_evaluacion, nombre_evaluacion) VALUES
+('EVAL001', 'Parcial 1'),
+('EVAL002', 'Parcial 2'),
+('EVAL003', 'Parcial 3'),
+('EVAL004', 'Ordinario')
+ON CONFLICT (id_evaluacion) DO NOTHING;
+
+-- =====================================================
 -- CREAR USUARIO ADMIN POR DEFECTO
 -- =====================================================
 -- Contraseña: admin123 -> $2b$12$4dGtQjmlRcIhLzEED.G.sut2y34cw7rvHCIzp/CsYPKeT2VEIQ7AK
 INSERT INTO usuarios (id_usuario, nombre_usuario, id_carrera, contraseña, rol, is_active) 
 VALUES ('admin', 'Administrador del Sistema', NULL, '$2b$12$4dGtQjmlRcIhLzEED.G.sut2y34cw7rvHCIzp/CsYPKeT2VEIQ7AK', 'admin', TRUE)
 ON CONFLICT (id_usuario) DO NOTHING;
+
+-- =====================================================
+-- MIGRACIÓN: COLUMNAS DE MATERIAS (es_academia, tipo_examen)
+-- =====================================================
+-- Si la tabla materias ya existía sin estas columnas, agregarlas.
+-- Tipos de examen válidos: 'escrito' | 'plataforma' (por defecto: plataforma)
+ALTER TABLE materias ADD COLUMN IF NOT EXISTS es_academia BOOLEAN DEFAULT FALSE;
+ALTER TABLE materias ADD COLUMN IF NOT EXISTS tipo_examen VARCHAR(20) DEFAULT 'plataforma';
+-- Asegurar que todas las materias tengan valores definidos (no se agregan automáticamente al sincronizar)
+UPDATE materias SET tipo_examen = 'plataforma' WHERE tipo_examen IS NULL;
+UPDATE materias SET es_academia = FALSE WHERE es_academia IS NULL;
+
+-- =====================================================
+-- SALAS DE CÓMPUTO (opcional)
+-- =====================================================
+-- Insertar aquí los id_aula que son salas de cómputo (para exámenes en plataforma).
+-- Ejemplo (ajustar ids según tus aulas): INSERT INTO salas_de_computo (id_aula) VALUES ('71'), ('72') ON CONFLICT (id_aula) DO NOTHING;
 
 -- =====================================================
 -- FIN DEL SCRIPT

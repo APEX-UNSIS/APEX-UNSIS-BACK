@@ -17,7 +17,7 @@ def get_aula_service(db: Session = Depends(get_db)) -> AulaService:
 @router.get("/", response_model=List[Aula])
 def read_aulas(
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
+    limit: int = Query(500, ge=1, le=2000),
     service: AulaService = Depends(get_aula_service)
 ):
     return service.get_all(skip=skip, limit=limit)
@@ -27,7 +27,7 @@ def read_aulas(
 def read_aulas_disponibles(
     capacidad_minima: Optional[int] = Query(None, ge=1),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
+    limit: int = Query(500, ge=1, le=2000),
     service: AulaService = Depends(get_aula_service)
 ):
     return service.get_disponibles(capacidad_minima, skip=skip, limit=limit)

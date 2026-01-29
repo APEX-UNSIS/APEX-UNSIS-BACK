@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # Configuración de la Aplicación
     app_env: str = "development"
     secret_key: str = "tu-clave-secreta-muy-segura-cambiar-en-produccion"
+    # CORS: orígenes permitidos separados por coma (ej. "https://midominio.com,http://192.168.1.10"). Vacío = usar defaults.
+    cors_origins: str = ""
+    # Clave para resetear contraseña de admin (solo para uso puntual). Si está vacía, el endpoint no hace nada.
+    reset_admin_key: str = ""
     
     @property
     def database_url(self) -> str:
