@@ -99,6 +99,12 @@ class UsuarioService:
                 print(f"[AUTH] Los hashes son diferentes (esto es normal, cada hash es único)")
                 return None
             
+            # Actualizar fecha de último login
+            from datetime import datetime
+            usuario.last_login = datetime.utcnow()
+            self.repository.db.commit()
+            self.repository.db.refresh(usuario)
+            
             print(f"Autenticación exitosa para usuario: {usuario.id_usuario}")
             return usuario
         except Exception as e:
