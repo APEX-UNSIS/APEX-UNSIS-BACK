@@ -2,6 +2,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.models.Aula import Aula
+from app.models.SalaComputo import SalaComputo
 from app.repositories.base_repository import BaseRepository
 from app.schemas.AulaSchema import AulaCreate, AulaUpdate
 
@@ -19,4 +20,16 @@ class AulaRepository(BaseRepository[Aula, AulaCreate, AulaUpdate]):
         if capacidad_minima:
             query = query.filter(Aula.capacidad >= capacidad_minima)
 
+        return query.offset(skip).limit(limit).all()
+
+    def get_salas_computo(self, skip: int = 0, limit: int = 100) -> List[Aula]:
+        """
+        Obtiene aulas registradas como salas de cómputo (tabla salas_de_computo).
+        Se usan para exámenes en plataforma. No depende de nombres ni de materias.
+        """
+        query = (
+            self.db.query(Aula)
+            .join(SalaComputo, Aula.id_aula == SalaComputo.id_aula)
+            .filter(Aula.is_disable == False)
+        )
         return query.offset(skip).limit(limit).all()

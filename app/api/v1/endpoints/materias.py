@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -63,3 +63,15 @@ def delete_materia(
     if materia is None:
         raise HTTPException(status_code=404, detail="Materia no encontrada")
     return materia
+
+
+@router.get("/carrera/{id_carrera}", response_model=List[Materia])
+def read_materias_por_carrera(
+    id_carrera: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    id_periodo: Optional[str] = Query(None, description="Filtrar por periodo académico"),
+    id_grupo: Optional[str] = Query(None, description="Filtrar por grupo escolar"),
+    service: MateriaService = Depends(get_materia_service)
+):
+    return service.get_by_carrera(id_carrera, skip=skip, limit=limit, id_periodo=id_periodo, id_grupo=id_grupo)
