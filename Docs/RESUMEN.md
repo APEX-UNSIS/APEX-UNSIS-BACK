@@ -37,9 +37,9 @@ Response: { usuario info }
 
 ### 1. Middleware para Proteger Endpoints
 ```python
-# Archivo: app/features/usuarios/interfaces/security.py
+# Archivo: app/dependencies.py
 
-from app.features.usuarios.interfaces.security import get_current_active_user, require_admin
+from app.dependencies import get_current_active_user, require_admin
 
 # Cualquier usuario autenticado
 @router.get("/recurso")
@@ -112,8 +112,8 @@ def obtener_solicitudes():
 
 ### Después (protegido):
 ```python
-from app.features.usuarios.interfaces.security import get_current_active_user
-from app.features.usuarios.domain.schemas import UsuarioResponse
+from app.dependencies import get_current_active_user
+from app.schemas.UsuarioSchema import UsuarioResponse
 
 @router.get("/solicitudes")
 def obtener_solicitudes(
@@ -131,7 +131,7 @@ def obtener_solicitudes(
 
 ### Protección por rol:
 ```python
-from app.features.usuarios.interfaces.security import require_roles
+from app.dependencies import require_roles
 
 @router.post("/aprobar/{id}")
 def aprobar_solicitud(
@@ -230,7 +230,7 @@ def info_publica():
 
 ### 2. Endpoint protegido (requiere auth)
 ```python
-from app.features.usuarios.interfaces.security import get_current_active_user
+from app.dependencies import get_current_active_user
 
 @router.get("/mi-perfil")
 def mi_perfil(current_user = Depends(get_current_active_user)):
@@ -239,7 +239,7 @@ def mi_perfil(current_user = Depends(get_current_active_user)):
 
 ### 3. Solo admin
 ```python
-from app.features.usuarios.interfaces.security import require_admin
+from app.dependencies import require_admin
 
 @router.delete("/usuarios/{id}")
 def eliminar_usuario(id: str, current_user = Depends(require_admin)):
@@ -248,7 +248,7 @@ def eliminar_usuario(id: str, current_user = Depends(require_admin)):
 
 ### 4. Múltiples roles
 ```python
-from app.features.usuarios.interfaces.security import require_roles
+from app.dependencies import require_roles
 
 @router.put("/actualizar/{id}")
 def actualizar(id: str, current_user = Depends(require_roles(["admin", "jefe"]))):
@@ -257,7 +257,7 @@ def actualizar(id: str, current_user = Depends(require_roles(["admin", "jefe"]))
 
 ### 5. Lógica condicional por rol
 ```python
-from app.features.usuarios.interfaces.security import get_current_active_user
+from app.dependencies import get_current_active_user
 
 @router.get("/datos")
 def obtener_datos(current_user = Depends(get_current_active_user)):
