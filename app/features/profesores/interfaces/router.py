@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.ProfesorRepository import ProfesorRepository
-from app.schemas.ProfesorSchema import Profesor, ProfesorCreate, ProfesorUpdate
-from app.services.ProfesorService import ProfesorService
+from app.features.profesores.infrastructure.repository import ProfesorRepository
+from app.features.profesores.domain.schemas import Profesor, ProfesorCreate, ProfesorUpdate
+from app.features.profesores.domain.service import ProfesorService
 
 router = APIRouter(prefix="/profesores", tags=["profesores"])
 

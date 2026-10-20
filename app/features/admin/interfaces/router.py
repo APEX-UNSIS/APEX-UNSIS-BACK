@@ -7,16 +7,16 @@ import logging
 import re
 
 from app.database import get_db
-from app.api.v1.endpoints.auth import get_current_user
-from app.schemas.UsuarioSchema import UsuarioResponse
-from app.models.Carrera import Carrera
-from app.models.GrupoEscolar import GrupoEscolar
-from app.models.Aula import Aula
-from app.models.Profesor import Profesor
-from app.models.Materia import Materia
-from app.models.PeriodoAcademico import PeriodoAcademico
-from app.models.HorarioClase import HorarioClase
-from app.models.SalaComputo import SalaComputo
+from app.features.usuarios.interfaces.security import get_current_user
+from app.features.usuarios.domain.schemas import UsuarioResponse
+from app.features.carreras.domain.models import Carrera
+from app.features.grupos.domain.models import GrupoEscolar
+from app.features.aulas.domain.models import Aula
+from app.features.profesores.domain.models import Profesor
+from app.features.materias.domain.models import Materia
+from app.features.periodos.domain.models import PeriodoAcademico
+from app.features.horarios.domain.models import HorarioClase
+from app.features.aulas.domain.models import SalaComputo
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -1269,8 +1269,8 @@ async def sincronizar_base_datos(
             materias_eliminadas = 0
             try:
                 from sqlalchemy import or_
-                from app.models.SolicitudExamen import SolicitudExamen
-                from app.models.PermisoSinodal import PermisoSinodal
+                from app.features.solicitudes.domain.models import SolicitudExamen
+                from app.features.permisos.domain.models import PermisoSinodal
                 
                 # Obtener IDs de materias a eliminar
                 materias_a_eliminar = db.query(Materia).filter(

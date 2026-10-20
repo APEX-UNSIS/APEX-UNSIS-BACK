@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.HorarioRepository import HorarioRepository
-from app.schemas.HorarioClaseSchema import HorarioClase, HorarioClaseCreate, HorarioClaseUpdate
-from app.services.HorarioService import HorarioService
+from app.features.horarios.infrastructure.repository import HorarioRepository
+from app.features.horarios.domain.schemas import HorarioClase, HorarioClaseCreate, HorarioClaseUpdate
+from app.features.horarios.domain.service import HorarioService
 
 router = APIRouter(prefix="/horarios", tags=["horarios"])
 

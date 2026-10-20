@@ -2,9 +2,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.MateriaRepository import MateriaRepository
-from app.schemas.MateriaSchema import Materia, MateriaCreate, MateriaUpdate
-from app.services.MateriaService import MateriaService
+from app.features.materias.infrastructure.repository import MateriaRepository
+from app.features.materias.domain.schemas import Materia, MateriaCreate, MateriaUpdate
+from app.features.materias.domain.service import MateriaService
 
 router = APIRouter(prefix="/materias", tags=["materias"])
 

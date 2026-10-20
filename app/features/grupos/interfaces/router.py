@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.GrupoRepository import GrupoRepository
-from app.schemas.GrupoEscolarSchema import GrupoEscolar, GrupoEscolarCreate, GrupoEscolarUpdate
-from app.services.GrupoService import GrupoService
+from app.features.grupos.infrastructure.repository import GrupoRepository
+from app.features.grupos.domain.schemas import GrupoEscolar, GrupoEscolarCreate, GrupoEscolarUpdate
+from app.features.grupos.domain.service import GrupoService
 
 router = APIRouter(prefix="/grupos", tags=["grupos"])
 

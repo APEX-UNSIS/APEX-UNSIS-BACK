@@ -8,13 +8,13 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
-from app.dependencies import (
+from app.features.usuarios.interfaces.security import (
     get_current_active_user,
     require_admin,
     require_roles,
     require_jefe_or_admin
 )
-from app.schemas.UsuarioSchema import UsuarioResponse
+from app.features.usuarios.domain.schemas import UsuarioResponse
 
 # Crear el router
 router = APIRouter(

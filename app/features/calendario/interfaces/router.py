@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.services.CalendarioExamenService import CalendarioExamenService
-from app.api.v1.endpoints.auth import get_current_user
-from app.schemas.UsuarioSchema import UsuarioResponse
-from app.schemas.CalendarioSchema import (
+from app.features.calendario.domain.service import CalendarioExamenService
+from app.features.usuarios.interfaces.security import get_current_user
+from app.features.usuarios.domain.schemas import UsuarioResponse
+from app.features.calendario.domain.schemas import (
     GenerarCalendarioRequest, 
     GenerarCalendarioResponse,
     RechazarCalendarioRequest
@@ -101,8 +101,8 @@ def verificar_calendario_existente(
             detail="El usuario no tiene una carrera asignada"
         )
     
-    from app.repositories.SolicitudRepository import SolicitudRepository
-    from app.repositories.HorarioRepository import HorarioRepository
+    from app.features.solicitudes.infrastructure.repository import SolicitudRepository
+    from app.features.horarios.infrastructure.repository import HorarioRepository
     
     solicitud_repo = SolicitudRepository(db)
     horario_repo = HorarioRepository(db)
@@ -160,10 +160,10 @@ def obtener_calendario_carrera(
             detail="El usuario no tiene una carrera asignada"
         )
     
-    from app.repositories.SolicitudRepository import SolicitudRepository
-    from app.repositories.HorarioRepository import HorarioRepository
-    from app.repositories.GrupoExamenRepository import GrupoExamenRepository
-    from app.repositories.AsignacionAulaRepository import AsignacionAulaRepository
+    from app.features.solicitudes.infrastructure.repository import SolicitudRepository
+    from app.features.horarios.infrastructure.repository import HorarioRepository
+    from app.features.grupos_examen.infrastructure.repository import GrupoExamenRepository
+    from app.features.asignaciones_aulas.infrastructure.repository import AsignacionAulaRepository
     from sqlalchemy.orm import joinedload
     
     solicitud_repo = SolicitudRepository(db)
@@ -196,7 +196,7 @@ def obtener_calendario_carrera(
     print(f"[DEBUG] Horarios de la carrera {current_user.id_carrera}: {len(horarios_carrera)} horarios, mapa materia-grupo-periodo: {len(horario_por_materia_grupo_periodo)}")
     
     # Obtener solicitudes con relaciones cargadas
-    from app.models.SolicitudExamen import SolicitudExamen
+    from app.features.solicitudes.domain.models import SolicitudExamen
     todas_solicitudes = db.query(SolicitudExamen).options(
         joinedload(SolicitudExamen.materia),
         joinedload(SolicitudExamen.periodo),
@@ -214,7 +214,7 @@ def obtener_calendario_carrera(
     print(f"[DEBUG] Solicitudes filtradas para carrera {current_user.id_carrera}: {len(solicitudes_carrera)}")
     
     # Obtener aula asignada al examen (fallback si no hay horario)
-    from app.models.AsignacionAula import AsignacionAula
+    from app.features.asignaciones_aulas.domain.models import AsignacionAula
     from collections import defaultdict
     
     # Contar (fecha, hora, id_aula) para detectar conflictos (misma aula misma fecha/hora)
@@ -229,7 +229,7 @@ def obtener_calendario_carrera(
     resultado = []
     for solicitud in solicitudes_carrera:
         try:
-            from app.models.GrupoExamen import GrupoExamen
+            from app.features.grupos_examen.domain.models import GrupoExamen
             grupos_examen = db.query(GrupoExamen).options(
                 joinedload(GrupoExamen.grupo)
             ).filter(GrupoExamen.id_horario == solicitud.id_horario).all()
@@ -337,10 +337,10 @@ def enviar_calendario_servicios_escolares(
             detail="El usuario no tiene una carrera asignada"
         )
     
-    from app.repositories.SolicitudRepository import SolicitudRepository
-    from app.repositories.HorarioRepository import HorarioRepository
-    from app.schemas.EstadoSolicitudSchema import EstadoSolicitud
-    from app.schemas.SolicitudExamenSchema import SolicitudExamenUpdate
+    from app.features.solicitudes.infrastructure.repository import SolicitudRepository
+    from app.features.horarios.infrastructure.repository import HorarioRepository
+    from app.features.solicitudes.domain.schemas import EstadoSolicitud
+    from app.features.solicitudes.domain.schemas import SolicitudExamenUpdate
     
     solicitud_repo = SolicitudRepository(db)
     horario_repo = HorarioRepository(db)
@@ -400,12 +400,12 @@ def obtener_calendarios_servicios_escolares(
             detail="Solo Servicios Escolares puede acceder a esta información"
         )
     
-    from app.models.SolicitudExamen import SolicitudExamen
-    from app.models.GrupoExamen import GrupoExamen
-    from app.models.AsignacionAula import AsignacionAula
-    from app.models.Carrera import Carrera
-    from app.models.Usuario import Usuario
-    from app.schemas.EstadoSolicitudSchema import EstadoSolicitud
+    from app.features.solicitudes.domain.models import SolicitudExamen
+    from app.features.grupos_examen.domain.models import GrupoExamen
+    from app.features.asignaciones_aulas.domain.models import AsignacionAula
+    from app.features.carreras.domain.models import Carrera
+    from app.features.usuarios.domain.models import Usuario
+    from app.features.solicitudes.domain.schemas import EstadoSolicitud
     from sqlalchemy.orm import joinedload
 
     # Una sola query con todas las relaciones necesarias (evita N+1)
@@ -538,10 +538,10 @@ def aprobar_calendario_masivo(
             detail="Solo Servicios Escolares puede aprobar calendarios"
         )
     
-    from app.repositories.SolicitudRepository import SolicitudRepository
-    from app.repositories.HorarioRepository import HorarioRepository
-    from app.schemas.EstadoSolicitudSchema import EstadoSolicitud
-    from app.schemas.SolicitudExamenSchema import SolicitudExamenUpdate
+    from app.features.solicitudes.infrastructure.repository import SolicitudRepository
+    from app.features.horarios.infrastructure.repository import HorarioRepository
+    from app.features.solicitudes.domain.schemas import EstadoSolicitud
+    from app.features.solicitudes.domain.schemas import SolicitudExamenUpdate
     
     solicitud_repo = SolicitudRepository(db)
     horario_repo = HorarioRepository(db)
@@ -610,10 +610,10 @@ def rechazar_calendario_masivo(
             detail="Solo Servicios Escolares puede rechazar calendarios"
         )
     
-    from app.repositories.SolicitudRepository import SolicitudRepository
-    from app.repositories.HorarioRepository import HorarioRepository
-    from app.schemas.EstadoSolicitudSchema import EstadoSolicitud
-    from app.schemas.SolicitudExamenSchema import SolicitudExamenUpdate
+    from app.features.solicitudes.infrastructure.repository import SolicitudRepository
+    from app.features.horarios.infrastructure.repository import HorarioRepository
+    from app.features.solicitudes.domain.schemas import EstadoSolicitud
+    from app.features.solicitudes.domain.schemas import SolicitudExamenUpdate
     
     solicitud_repo = SolicitudRepository(db)
     horario_repo = HorarioRepository(db)

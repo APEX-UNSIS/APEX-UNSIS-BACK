@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.CarreraRepository import CarreraRepository
-from app.schemas.CarreraSchema import Carrera, CarreraCreate, CarreraUpdate
-from app.services.CarreraService import CarreraService
+from app.features.carreras.infrastructure.repository import CarreraRepository
+from app.features.carreras.domain.schemas import Carrera, CarreraCreate, CarreraUpdate
+from app.features.carreras.domain.service import CarreraService
 
 router = APIRouter(prefix="/carreras", tags=["carreras"])
 

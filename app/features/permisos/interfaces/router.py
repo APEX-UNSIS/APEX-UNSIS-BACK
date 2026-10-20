@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.PermisoRepository import PermisoRepository
-from app.schemas.PermisoSinodalSchema import PermisoSinodal, PermisoSinodalCreate, PermisoSinodalUpdate
-from app.services.PermisoService import PermisoService
+from app.features.permisos.infrastructure.repository import PermisoRepository
+from app.features.permisos.domain.schemas import PermisoSinodal, PermisoSinodalCreate, PermisoSinodalUpdate
+from app.features.permisos.domain.service import PermisoService
 
 router = APIRouter(prefix="/permisos", tags=["permisos"])
 

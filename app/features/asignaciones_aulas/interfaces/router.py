@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.AsignacionAulaRepository import AsignacionAulaRepository
-from app.schemas.AsignacionAulaSchema import AsignacionAula, AsignacionAulaCreate, AsignacionAulaUpdate
-from app.services.AsignacionAulaService import AsignacionAulaService
+from app.features.asignaciones_aulas.infrastructure.repository import AsignacionAulaRepository
+from app.features.asignaciones_aulas.domain.schemas import AsignacionAula, AsignacionAulaCreate, AsignacionAulaUpdate
+from app.features.asignaciones_aulas.domain.service import AsignacionAulaService
 
 router = APIRouter(prefix="/asignaciones-aulas", tags=["asignaciones-aulas"])
 

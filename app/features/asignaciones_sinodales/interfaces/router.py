@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.AsignacionSinodalRepository import AsignacionSinodalRepository
-from app.schemas.AsignacionSinodalSchema import AsignacionSinodal, AsignacionSinodalCreate, AsignacionSinodalUpdate
-from app.services.AsignacionSinodalService import AsignacionSinodalService
+from app.features.asignaciones_sinodales.infrastructure.repository import AsignacionSinodalRepository
+from app.features.asignaciones_sinodales.domain.schemas import AsignacionSinodal, AsignacionSinodalCreate, AsignacionSinodalUpdate
+from app.features.asignaciones_sinodales.domain.service import AsignacionSinodalService
 
 router = APIRouter(prefix="/asignaciones-sinodales", tags=["asignaciones-sinodales"])
 

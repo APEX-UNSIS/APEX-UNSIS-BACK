@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.EvaluacionRepository import EvaluacionRepository
-from app.schemas.TipoEvaluacionSchema import TipoEvaluacion, TipoEvaluacionCreate, TipoEvaluacionUpdate
-from app.services.EvaluacionService import EvaluacionService
+from app.features.evaluaciones.infrastructure.repository import EvaluacionRepository
+from app.features.evaluaciones.domain.schemas import TipoEvaluacion, TipoEvaluacionCreate, TipoEvaluacionUpdate
+from app.features.evaluaciones.domain.service import EvaluacionService
 
 router = APIRouter(prefix="/evaluaciones", tags=["evaluaciones"])
 

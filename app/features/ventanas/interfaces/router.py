@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.VentanaRepository import VentanaRepository
-from app.schemas.VentanaAplicacionSchema import VentanaAplicacion, VentanaAplicacionCreate, VentanaAplicacionUpdate
-from app.services.VentanaService import VentanaService
+from app.features.ventanas.infrastructure.repository import VentanaRepository
+from app.features.ventanas.domain.schemas import VentanaAplicacion, VentanaAplicacionCreate, VentanaAplicacionUpdate
+from app.features.ventanas.domain.service import VentanaService
 
 router = APIRouter(prefix="/ventanas", tags=["ventanas"])
 

@@ -3,10 +3,10 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.SolicitudRepository import SolicitudRepository
-from app.schemas.EstadoSolicitudSchema import EstadoSolicitud
-from app.schemas.SolicitudExamenSchema import SolicitudExamen, SolicitudExamenCreate, SolicitudExamenUpdate
-from app.services.SolicitudService import SolicitudService
+from app.features.solicitudes.infrastructure.repository import SolicitudRepository
+from app.features.solicitudes.domain.schemas import EstadoSolicitud
+from app.features.solicitudes.domain.schemas import SolicitudExamen, SolicitudExamenCreate, SolicitudExamenUpdate
+from app.features.solicitudes.domain.service import SolicitudService
 
 router = APIRouter(prefix="/solicitudes", tags=["solicitudes"])
 

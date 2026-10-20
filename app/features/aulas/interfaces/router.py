@@ -2,9 +2,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.AulaRepository import AulaRepository
-from app.schemas.AulaSchema import Aula, AulaCreate, AulaUpdate
-from app.services.AulaService import AulaService
+from app.features.aulas.infrastructure.repository import AulaRepository
+from app.features.aulas.domain.schemas import Aula, AulaCreate, AulaUpdate
+from app.features.aulas.domain.service import AulaService
 
 router = APIRouter(prefix="/aulas", tags=["aulas"])
 

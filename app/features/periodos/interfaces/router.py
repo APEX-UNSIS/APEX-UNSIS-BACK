@@ -2,9 +2,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.repositories.PeriodoRepository import PeriodoRepository
-from app.schemas.PeriodoAcademicoSchema import PeriodoAcademico, PeriodoAcademicoCreate, PeriodoAcademicoUpdate
-from app.services.PeriodoService import PeriodoService
+from app.features.periodos.infrastructure.repository import PeriodoRepository
+from app.features.periodos.domain.schemas import PeriodoAcademico, PeriodoAcademicoCreate, PeriodoAcademicoUpdate
+from app.features.periodos.domain.service import PeriodoService
 
 router = APIRouter(prefix="/periodos", tags=["periodos"])
 
