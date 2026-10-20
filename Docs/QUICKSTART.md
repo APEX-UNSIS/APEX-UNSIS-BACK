@@ -83,8 +83,8 @@ curl -X GET "http://localhost:8000/api/v1/auth/me" \
 
 ```python
 from fastapi import APIRouter, Depends
-from app.features.usuarios.interfaces.security import get_current_active_user
-from app.features.usuarios.domain.schemas import UsuarioResponse
+from app.dependencies import get_current_active_user
+from app.schemas.UsuarioSchema import UsuarioResponse
 
 router = APIRouter()
 
@@ -96,7 +96,7 @@ def mi_endpoint(current_user: UsuarioResponse = Depends(get_current_active_user)
 ### Método 2: Requerir rol específico
 
 ```python
-from app.features.usuarios.interfaces.security import require_admin
+from app.dependencies import require_admin
 
 @router.delete("/eliminar/{id}")
 def eliminar_recurso(id: int, current_user = Depends(require_admin)):
@@ -106,7 +106,7 @@ def eliminar_recurso(id: int, current_user = Depends(require_admin)):
 ### Método 3: Múltiples roles permitidos
 
 ```python
-from app.features.usuarios.interfaces.security import require_roles
+from app.dependencies import require_roles
 
 @router.post("/aprobar/{id}")
 def aprobar(id: int, current_user = Depends(require_roles(["admin", "jefe"]))):

@@ -3,11 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-# Importar app.features registra todos los modelos de las features en SQLAlchemy
-import app.features  # noqa: F401
-from app.api.v1 import api_router
+from app.api.v1.endpoints import api_router
 from app.database import get_db, init_db
 from app.config import get_settings
+# Importar modelos para que se registren en SQLAlchemy al inicializar la base de datos
+from app.models import Usuario, Carrera, SalaComputo  # noqa: F401
 
 # Obtener configuración
 settings = get_settings()

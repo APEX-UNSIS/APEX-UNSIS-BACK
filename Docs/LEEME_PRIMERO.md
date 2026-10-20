@@ -71,7 +71,7 @@ Header: Authorization: Bearer <token>
 
 ###  Proteger tus Endpoints
 ```python
-from app.features.usuarios.interfaces.security import get_current_active_user
+from app.dependencies import get_current_active_user
 
 @router.get("/mi-recurso")
 def mi_recurso(current_user = Depends(get_current_active_user)):
@@ -116,9 +116,9 @@ uvicorn app.main:app --reload
 - **ejemplo_frontend_login.html** - Demo de login
 
 ###  Código
-- **app/features/usuarios/interfaces/security.py** - Middleware de autenticación
-- **app/features/usuarios/interfaces/auth.py** - Endpoints de auth
-- **app/features/usuarios/interfaces/ejemplo_auth.py** - Ejemplos de uso
+- **app/dependencies.py** - Middleware de autenticación
+- **app/api/v1/endpoints/auth.py** - Endpoints de auth
+- **app/api/v1/endpoints/ejemplo_auth.py** - Ejemplos de uso
 
 ---
 
@@ -135,7 +135,7 @@ uvicorn app.main:app --reload
 
 ```python
 # Para proteger un endpoint, solo agrega esto:
-from app.features.usuarios.interfaces.security import get_current_active_user
+from app.dependencies import get_current_active_user
 
 @router.get("/tu-endpoint")
 def tu_funcion(current_user = Depends(get_current_active_user)):
@@ -149,7 +149,7 @@ def tu_funcion(current_user = Depends(get_current_active_user)):
 
 1. **Errores comunes:** [AUTH_GUIDE.md](AUTH_GUIDE.md) → Troubleshooting
 2. **Comandos:** [COMANDOS.md](COMANDOS.md)
-3. **Ejemplos:** [ejemplo_auth.py](app/features/usuarios/interfaces/ejemplo_auth.py)
+3. **Ejemplos:** [ejemplo_auth.py](app/api/v1/endpoints/ejemplo_auth.py)
 
 ---
 
