@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
-from datetime import date
+from datetime import date, time
 
 from app.models.SolicitudExamen import SolicitudExamen
 from app.repositories.base_repository import BaseRepository
@@ -36,3 +36,23 @@ class SolicitudRepository(BaseRepository[SolicitudExamen, SolicitudExamenCreate,
         return self.db.query(SolicitudExamen).filter(
             SolicitudExamen.id_periodo == id_periodo
         ).offset(skip).limit(limit).all()
+
+    def get_by_periodo_evaluacion(self, id_periodo: str, id_evaluacion: str) -> List[SolicitudExamen]:
+        return self.db.query(SolicitudExamen).filter(
+            SolicitudExamen.id_periodo == id_periodo,
+            SolicitudExamen.id_evaluacion == id_evaluacion
+        ).all()
+
+    def get_by_fecha_hora_aula(self, fecha: date, hora_inicio: time, hora_fin: time, id_aula: str) -> List[SolicitudExamen]:
+        """Obtiene solicitudes que tienen conflicto con una aula en fecha/hora específica"""
+        from app.models.AsignacionAula import AsignacionAula
+        return self.db.query(SolicitudExamen).join(
+            AsignacionAula, SolicitudExamen.id_horario == AsignacionAula.id_horario
+        ).filter(
+            SolicitudExamen.fecha_examen == fecha,
+            SolicitudExamen.estado != 2,  # No rechazadas
+            AsignacionAula.id_aula == id_aula,
+            # Verificar que haya solapamiento en horarios
+            SolicitudExamen.hora_inicio < hora_fin,
+            SolicitudExamen.hora_fin > hora_inicio
+        ).all()

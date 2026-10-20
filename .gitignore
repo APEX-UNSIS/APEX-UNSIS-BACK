@@ -140,3 +140,8 @@ dmypy.json
 .env.development.local
 .env.test.local
 .env.production.local
+
+# SQL: solo crear_tablas y limpiar_base_datos en el repo
+actualizar_tipo_examen_plataforma.sql
+agregar_campos_materias.sql
+insertar_datos_tercera_evaluacion.sql

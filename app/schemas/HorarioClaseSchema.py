@@ -45,4 +45,4 @@ class HorarioClase(HorarioClaseBase):
     aula: Optional[Aula] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True

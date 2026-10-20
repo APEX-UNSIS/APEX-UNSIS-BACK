@@ -18,4 +18,4 @@ class CarreraUpdate(BaseModel):
 
 class Carrera(CarreraBase):
     class Config:
-        orm_mode = True
+        from_attributes = True

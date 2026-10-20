@@ -29,4 +29,4 @@ class AsignacionAula(AsignacionAulaBase):
     profesor_aplicador: Optional[Profesor] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True

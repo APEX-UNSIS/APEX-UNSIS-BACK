@@ -26,4 +26,4 @@ class GrupoEscolar(GrupoEscolarBase):
     carrera: Optional[Carrera] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True

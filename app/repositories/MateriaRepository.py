@@ -15,3 +15,26 @@ class MateriaRepository(BaseRepository[Materia, MateriaCreate, MateriaUpdate]):
 
     def get_by_nombre(self, nombre: str) -> Optional[Materia]:
         return self.db.query(Materia).filter(Materia.nombre_materia == nombre).first()
+
+    def get_by_carrera(self, id_carrera: str, skip: int = 0, limit: int = 100, id_periodo: Optional[str] = None, id_grupo: Optional[str] = None) -> List[Materia]:
+        """Obtiene materias por carrera a través de horarios y grupos, con filtros opcionales por periodo y grupo"""
+        from app.models.HorarioClase import HorarioClase
+        from app.models.GrupoEscolar import GrupoEscolar
+        
+        query = self.db.query(Materia).join(
+            HorarioClase, Materia.id_materia == HorarioClase.id_materia
+        ).join(
+            GrupoEscolar, HorarioClase.id_grupo == GrupoEscolar.id_grupo
+        ).filter(
+            GrupoEscolar.id_carrera == id_carrera
+        )
+        
+        # Filtrar por periodo si se especifica
+        if id_periodo:
+            query = query.filter(HorarioClase.id_periodo == id_periodo)
+        
+        # Filtrar por grupo si se especifica
+        if id_grupo:
+            query = query.filter(HorarioClase.id_grupo == id_grupo)
+        
+        return query.distinct().offset(skip).limit(limit).all()
