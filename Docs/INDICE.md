@@ -36,7 +36,7 @@ Si es tu primera vez, lee los archivos en este orden:
 | Archivo | Descripción | Cuándo Usarlo |
 |---------|-------------|---------------|
 | [AUTH_GUIDE.md](AUTH_GUIDE.md) | Guía completa de autenticación | Referencia completa |
-| [IMPLEMENTACION.md](IMPLEMENTACION.md) | Detalles técnicos | Entender la arquitectura |
+| [API_REFERENCE.md](API_REFERENCE.md) | Endpoints, errores y frontend | Consultar la API |
 | [COMANDOS.md](COMANDOS.md) | Lista de comandos útiles | Desarrollo diario |
 
 ###  Recursos Visuales
@@ -68,7 +68,7 @@ Si es tu primera vez, lee los archivos en este orden:
 | Archivo | Descripción | Cómo Usar |
 |---------|-------------|-----------|
 | `ejemplo_frontend_login.html` | Interfaz de login | Abrir en navegador |
-| `app/api/v1/endpoints/ejemplo_auth.py` | Ejemplos de código | Leer y copiar patrones |
+| `app/features/usuarios/interfaces/ejemplo_auth.py` | Ejemplos de código | Leer y copiar patrones |
 
 ---
 
@@ -104,15 +104,15 @@ app/
 ### 2⃣ "Quiero proteger mis endpoints"
 ```
 1. Lee: AUTH_GUIDE.md → Sección "Proteger Endpoints"
-2. Revisa: app/api/v1/endpoints/ejemplo_auth.py
-3. Usa: from app.dependencies import get_current_active_user
+2. Revisa: app/features/usuarios/interfaces/ejemplo_auth.py
+3. Usa: from app.features.usuarios.interfaces.security import get_current_active_user
 ```
 
 ### 3⃣ "Quiero entender cómo funciona"
 ```
 1. Lee: DIAGRAMAS.md
 2. Lee: IMPLEMENTACION.md
-3. Revisa código en: app/api/v1/endpoints/auth.py
+3. Revisa código en: app/features/usuarios/interfaces/auth.py
 ```
 
 ### 4⃣ "Necesito integrar con mi frontend"
@@ -155,14 +155,14 @@ app/
 ###  Nivel Intermedio
 - [x] [AUTH_GUIDE.md](AUTH_GUIDE.md)
 - [x] [DIAGRAMAS.md](DIAGRAMAS.md)
-- [x] [app/api/v1/endpoints/ejemplo_auth.py](app/api/v1/endpoints/ejemplo_auth.py)
+- [x] [app/features/usuarios/interfaces/ejemplo_auth.py](app/features/usuarios/interfaces/ejemplo_auth.py)
 - [x] [COMANDOS.md](COMANDOS.md)
 
 ###  Nivel Avanzado
 - [x] [IMPLEMENTACION.md](IMPLEMENTACION.md)
-- [x] [app/api/v1/endpoints/auth.py](app/api/v1/endpoints/auth.py)
-- [x] [app/services/UsuarioService.py](app/services/UsuarioService.py)
-- [x] [app/dependencies.py](app/dependencies.py)
+- [x] [app/features/usuarios/interfaces/auth.py](app/features/usuarios/interfaces/auth.py)
+- [x] [app/features/usuarios/domain/service.py](app/features/usuarios/domain/service.py)
+- [x] [app/features/usuarios/interfaces/security.py](app/features/usuarios/interfaces/security.py)
 
 ---
 
@@ -191,19 +191,19 @@ app/
 
 ### Endpoints
 - **Lista completa:** [AUTH_GUIDE.md](AUTH_GUIDE.md) → "Endpoints de Autenticación"
-- **Código fuente:** `app/api/v1/endpoints/auth.py`
-- **Ejemplos:** `app/api/v1/endpoints/ejemplo_auth.py`
+- **Código fuente:** `app/features/usuarios/interfaces/auth.py`
+- **Ejemplos:** `app/features/usuarios/interfaces/ejemplo_auth.py`
 
 ### Dependencias/Middleware
 - **Documentación:** [AUTH_GUIDE.md](AUTH_GUIDE.md) → "Proteger Endpoints"
-- **Código fuente:** `app/dependencies.py`
-- **Ejemplos de uso:** `app/api/v1/endpoints/ejemplo_auth.py`
+- **Código fuente:** `app/features/usuarios/interfaces/security.py`
+- **Ejemplos de uso:** `app/features/usuarios/interfaces/ejemplo_auth.py`
 
 ### Usuarios
-- **Modelo:** `app/models/Usuario.py`
-- **Schemas:** `app/schemas/UsuarioSchema.py`
-- **Servicio:** `app/services/UsuarioService.py`
-- **Repositorio:** `app/repositories/UsuarioRepository.py`
+- **Modelo:** `app/features/usuarios/domain/models.py`
+- **Schemas:** `app/features/usuarios/domain/schemas.py`
+- **Servicio:** `app/features/usuarios/domain/service.py`
+- **Repositorio:** `app/features/usuarios/infrastructure/repository.py`
 - **SQL:** `insertar_usuarios_prueba.sql`
 
 ### Configuración
@@ -251,7 +251,7 @@ app/
 ### Para Desarrollar
 5. [AUTH_GUIDE.md](AUTH_GUIDE.md) - 30 min
 6. [DIAGRAMAS.md](DIAGRAMAS.md) - 15 min
-7. Revisar `app/api/v1/endpoints/ejemplo_auth.py` - 10 min
+7. Revisar `app/features/usuarios/interfaces/ejemplo_auth.py` - 10 min
 
 ### Para Dominar
 8. [IMPLEMENTACION.md](IMPLEMENTACION.md) - 20 min

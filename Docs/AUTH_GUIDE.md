@@ -138,8 +138,8 @@ Authorization: Bearer <tu_token_jwt>
 
 ```python
 from fastapi import APIRouter, Depends
-from app.dependencies import get_current_active_user
-from app.schemas.UsuarioSchema import UsuarioResponse
+from app.features.usuarios.interfaces.security import get_current_active_user
+from app.features.usuarios.domain.schemas import UsuarioResponse
 
 router = APIRouter()
 
@@ -155,8 +155,8 @@ def obtener_recurso(current_user: UsuarioResponse = Depends(get_current_active_u
 
 ```python
 from fastapi import APIRouter, Depends
-from app.dependencies import require_admin, require_roles
-from app.schemas.UsuarioSchema import UsuarioResponse
+from app.features.usuarios.interfaces.security import require_admin, require_roles
+from app.features.usuarios.domain.schemas import UsuarioResponse
 
 router = APIRouter()
 
@@ -181,7 +181,7 @@ def aprobar_solicitud(
 
 ```python
 from fastapi import APIRouter, Depends
-from app.dependencies import require_admin
+from app.features.usuarios.interfaces.security import require_admin
 
 # Todas las rutas de este router requieren ser admin
 router = APIRouter(
