@@ -1,5 +1,5 @@
 from typing import Generic, TypeVar, List, Optional
-from app.repositories.base_repository import BaseRepository
+from app.core.base_repository import BaseRepository
 
 ModelType = TypeVar("ModelType")
 CreateSchemaType = TypeVar("CreateSchemaType")
