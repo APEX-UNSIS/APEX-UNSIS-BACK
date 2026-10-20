@@ -36,6 +36,7 @@ Si es tu primera vez, lee los archivos en este orden:
 | Archivo | Descripción | Cuándo Usarlo |
 |---------|-------------|---------------|
 | [AUTH_GUIDE.md](AUTH_GUIDE.md) | Guía completa de autenticación | Referencia completa |
+| [API_REFERENCE.md](API_REFERENCE.md) | Endpoints, errores y frontend | Consultar la API |
 | [COMANDOS.md](COMANDOS.md) | Lista de comandos útiles | Desarrollo diario |
 
 ###  Recursos Visuales
