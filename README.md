@@ -60,7 +60,7 @@ app/
 
 | Flujo | Rama | Uso |
 |-------|------|-----|
-| develop | `dev` | integración del trabajo diario |
+| develop | `dev` | integración del trabajo diario (pausado por realese2.0) |
 | release 2.0 | `realese2.0-dev` | reestructuración de arquitectura (en curso) |
 | main | `main` | producción |
 
