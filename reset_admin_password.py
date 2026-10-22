@@ -33,7 +33,7 @@ def reset_admin_password(new_password: str = 'admin123'):
     db_name = os.getenv('DB_NAME') or os.getenv('POSTGRES_DB', 'apex_db')
     
     # Crear conexión
-    database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    database_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
     
     try:
         engine = create_engine(database_url)
@@ -52,17 +52,17 @@ def reset_admin_password(new_password: str = 'admin123'):
         session.commit()
         
         if result.rowcount > 0:
-            print(f"✅ Contraseña del usuario 'admin' reseteada exitosamente.")
+            print(f" Contraseña del usuario 'admin' reseteada exitosamente.")
             print(f"   Nueva contraseña: {new_password}")
             print(f"   Hash generado: {hashed_password}")
         else:
-            print("⚠️  No se encontró el usuario 'admin' en la base de datos.")
+            print("  No se encontró el usuario 'admin' en la base de datos.")
             print("   Asegúrate de que el usuario existe.")
         
         session.close()
         
     except Exception as e:
-        print(f"❌ Error al resetear la contraseña: {str(e)}")
+        print(f" Error al resetear la contraseña: {str(e)}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

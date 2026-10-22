@@ -1,0 +1,68 @@
+name: apex-unsis
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PUBLISHED_PORT:-5433}:5432"    # 5432 por si del host ya está ocupado
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./crear_tablas.sql:/docker-entrypoint-initdb.d/01_crear_tablas.sql:ro
+      - ./db/docker-init/02_migracion_usuarios.sql:/docker-entrypoint-initdb.d/02_migracion_usuarios.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:                                     # nombre "backend": lo exige el nginx.conf del front
+    build:
+      context: .
+      # Si la red de docker bridge no tiene salida a internet 
+      # (el firewall bloquea el egress). El build usa la red del host.
+      network: host
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: db                              # nombre del servicio en la red
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      APP_ENV: ${APP_ENV}
+      SECRET_KEY: ${SECRET_KEY}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/app                                 # hot-reload,  no reload in production
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  front:
+    build:
+      context: ../APEX-UNSIS-FRONT            # repo hermano
+      network: host                          # npm ci necesita salida a internet
+      args:
+        REACT_APP_API_URL: /api/v1            # mismo origen → sin CORS (nginx proxea /api → backend)
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy            # nginx resuelve "backend" al arrancar
+    ports:
+      - "3000:80"                             # nginx escucha en 80
+
+volumes:
+  pgdata:
