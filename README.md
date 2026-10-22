@@ -121,3 +121,21 @@ docs: readme con introduccion y flujo de trabajo
 | [Docs/DIAGRAMAS.md](Docs/DIAGRAMAS.md) | Diagramas del sistema |
 | [Docs/COMANDOS.md](Docs/COMANDOS.md) | Comandos útiles |
 | [Docs/INDICE.md](Docs/INDICE.md) | Índice completo de la documentación |
+
+
+### Comandos utiles para docker 
+```bash
+cp .env.example .env          # ajustar SECRET_KEY y credenciales
+docker compose up -d --build
+docker compose logs -f backend  # ver logs de arranque       
+``` 
+
+#### al levantar con compose debe marcar creados y corriendo lo siguiente
+```bash
+[+] up 5/5
+ ✔ Image apex-unsis-backend       Built                                    31.9s
+ ✔ Image apex-unsis-front         Built                                    32.0s
+ ✔ Container apex-unsis-front-1   Running                                   0.0s
+ ✔ Container apex-unsis-db-1      Healthy                                   3.3s
+ ✔ Container apex-unsis-backend-1 Healthy 
+```
