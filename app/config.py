@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
@@ -20,17 +20,20 @@ class Settings(BaseSettings):
     cors_origins: str = ""
     # Clave para resetear contraseña de admin (solo para uso puntual). Si está vacía, el endpoint no hace nada.
     reset_admin_key: str = ""
-    
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        # El .env también lleva variables de infraestructura (p. ej. DB_PUBLISHED_PORT que usa docker-compose).
+        extra="ignore",
+    )
+
     @property
     def database_url(self) -> str:
         """
-        Construye la URL de conexión a PostgreSQL
+        Construye la URL de conexión a PostgreSQL.
         """
-        return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+        return f"postgresql+psycopg2://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
 
 @lru_cache()
